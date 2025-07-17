@@ -53,15 +53,16 @@ class BookManager:
                     #     self.books[book_name] = bookInstance  # e.g. "contact": ContactBook()
 
     def save_books_state (self):
-        books_root = Path(__file__).parent.parent / 'core' / 'books'
-
-        for book in self.books:
-            book_obj = self.books[book]
-            book_name = book_obj.get_book_name()
-            book_pkl_data_file_path = books_root / book_name / f'{book_name}_book_data.pkl'
-
-            with open(book_pkl_data_file_path, "wb") as f:
-                pickle.dump(book_obj, f)
+        pass
+        # books_root = Path(__file__).parent.parent / 'core' / 'books'
+        #
+        # for book in self.books:
+        #     book_obj = self.books[book]
+        #     book_name = book_obj.get_book_name()
+        #     book_pkl_data_file_path = books_root / book_name / f'{book_name}_book_data.pkl'
+        #
+        #     with open(book_pkl_data_file_path, "wb") as f:
+        #         pickle.dump(book_obj, f)
 
     def get_book (self, book_name: str):
         if book_name not in self.books:
