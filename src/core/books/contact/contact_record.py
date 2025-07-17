@@ -12,6 +12,7 @@ class ContactRecord(Record):
     @hidden_method
     def get_record_fields () -> list:
         return ['firstname', 'lastname', 'address', 'email', 'birthday']
+        return ['firstname', 'lastname', 'address', 'email', 'birthday']
 
     @staticmethod
     @hidden_method
