@@ -9,7 +9,7 @@ class ContactRecord(Record):
     @staticmethod
     @hidden_method
     def get_record_fields () -> list:
-        return ['firstname', 'lastname', 'address', 'phone', 'email', 'birthday']
+        return ['firstname', 'lastname', 'address', 'email', 'birthday']
 
     @staticmethod
     @hidden_method
@@ -25,10 +25,10 @@ class ContactRecord(Record):
     def validate_email (self, email):
         return True  # todo: add email validation here, raise error in case of wrong value
 
-    def validate_phone (self, number):
-        return True  # todo: add phone number validation here, raise error in case of wrong value
-
     def validate_birthday (self, birthday):
+        return True  # todo: add birthday validation here, raise error in case of wrong value
+
+    def validate_phone_number (self, phone_number):
         return True  # todo: add phone number validation here, raise error in case of wrong value
 
     # ---------- Utility ----------
