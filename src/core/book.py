@@ -8,6 +8,10 @@ import pickle
 from pathlib import Path
 
 
+def method_args_as_command_params (func):
+    func._method_args_as_command_params = True
+    return func
+
 def hidden_method (func):
     func._hidden = True
     return func
@@ -17,6 +21,9 @@ class Book(ABC):
     PARAM_SEARCH_PREFIX = 'search'
     PARAM_UPDATE_PREFIX = 'update'
 
+    PARAM_MULTI_VALUE_TO_SEARCH_PREFIX = 'old'
+    PARAM_MULTI_VALUE_TO_UPDATE_PREFIX = 'new'
+
     @classmethod
     def get_search_prefix (cls):
         return cls.PARAM_SEARCH_PREFIX
@@ -24,6 +31,14 @@ class Book(ABC):
     @classmethod
     def get_update_prefix (cls):
         return cls.PARAM_UPDATE_PREFIX
+
+    @classmethod
+    def get_multi_value_to_search_prefix (cls):
+        return cls.PARAM_MULTI_VALUE_TO_SEARCH_PREFIX
+
+    @classmethod
+    def get_multi_value_to_update_prefix (cls):
+        return cls.PARAM_MULTI_VALUE_TO_UPDATE_PREFIX
 
     def __init__ (self):
         self.records = []
@@ -50,7 +65,7 @@ class Book(ABC):
 
         for arg_key, arg_value in kwargs.items():
             if arg_key.startswith(Book.get_search_prefix()):
-                conditions[arg_key.replace(Book.get_search_prefix(), '')] = arg_value
+                conditions[arg_key.replace(Book.get_search_prefix() + '_', '')] = arg_value
                 continue
 
         # looks for matching records and deletes them
@@ -72,7 +87,11 @@ class Book(ABC):
             "lastname": "Smith"
         }
         """
-        conditions = kwargs
+        conditions = {}
+        for arg_key, arg_value in kwargs.items():
+            if arg_key.startswith(Book.get_search_prefix()):
+                conditions[arg_key.replace(Book.get_search_prefix() + '_', '')] = arg_value
+                continue
 
         # returns a list of all records that match the conditions
         found_records = [record for record in self.records if self._matches_conditions(record, conditions)]
@@ -94,18 +113,10 @@ class Book(ABC):
 
         for arg_key, arg_value in kwargs.items():
             if arg_key.startswith(Book.get_search_prefix()):
-                conditions[arg_key.replace(Book.get_search_prefix(), '')] = arg_value
+                conditions[arg_key.replace(Book.get_search_prefix() + '_', '')] = arg_value
                 continue
             elif arg_key.startswith(Book.get_update_prefix()):
-                fields_to_update[arg_key.replace(Book.get_update_prefix(), '')] = arg_value
-
-        """
-        Example of 'conditions' param:
-        conditions = {
-            "firstname": "Alice",
-            "lastname": "Smith"
-        }
-        """
+                fields_to_update[arg_key.replace(Book.get_update_prefix() + '_', '')] = arg_value
 
         # returns a list of all records that match the conditions
         updated_records = []

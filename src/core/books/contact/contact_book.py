@@ -3,7 +3,7 @@
 from datetime import datetime, timedelta
 from typing import List
 
-from src.core.book import Book, hidden_method
+from src.core.book import Book, hidden_method, method_args_as_command_params
 
 
 class ContactBook(Book):
@@ -12,7 +12,8 @@ class ContactBook(Book):
     def get_book_name (self) -> str:
         return 'contact'
 
-    def get_coming_birthdays_from_now (self, days_ahead) -> List[str]:
+    @method_args_as_command_params
+    def get_coming_birthdays_from_now (self, days_ahead: int = 0) -> List[str]:
         days_ahead = int(days_ahead)
         today = datetime.today().date()
         upcoming_dates = {
