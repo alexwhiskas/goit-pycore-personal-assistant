@@ -9,18 +9,7 @@ from src.core.book import Book
 
 
 class BookManager:
-    PARAM_SEARCH_PREFIX = 'search'
-    PARAM_UPDATE_PREFIX = 'update'
-
     books: Dict[str, Book] = {}
-
-    @classmethod
-    def get_search_prefix (cls):
-        return cls.PARAM_SEARCH_PREFIX
-
-    @classmethod
-    def get_update_prefix (cls):
-        return cls.PARAM_UPDATE_PREFIX
 
     def __init__ (self):
         self.books = {}
@@ -94,11 +83,11 @@ class BookManager:
                     else:
                         # for operations which require search operations - show fields to search by
                         if operation_name in ['update', 'get', 'delete']:
-                            params.update({BookManager.get_search_prefix() + '_' + record_class_multi_field: record_class_multi_field})
+                            params.update({Book.get_search_prefix() + '_' + record_class_multi_field: record_class_multi_field})
 
                             # for update operations - show fields user can modify
                             if operation_name in ['update']:
-                                params.update({BookManager.get_update_prefix() + '_' + record_class_multi_field: record_class_multi_field})
+                                params.update({Book.get_update_prefix() + '_' + record_class_multi_field: record_class_multi_field})
 
                     commands[command_name] = params
 
@@ -152,11 +141,11 @@ class BookManager:
             # for operations which require search operations - show fields to search by
             if operation_name in ['update', 'get', 'delete']:
                 for field_name in record_fields:
-                    params.update({BookManager.get_search_prefix() + '_' + field_name: field_name})
+                    params.update({Book.get_search_prefix() + '_' + field_name: field_name})
 
                     # for update operations - show fields user can modify
                     if operation_name in ['update']:
-                        params.update({BookManager.get_update_prefix() + '_' + field_name: field_name})
+                        params.update({Book.get_update_prefix() + '_' + field_name: field_name})
 
         # if not generic record operations - show function arguments as commands params
         if len(params) == 0:

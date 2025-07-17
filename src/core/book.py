@@ -7,8 +7,6 @@ import inspect
 import pickle
 from pathlib import Path
 
-from src.bot.book_manager import BookManager
-
 
 def hidden_method (func):
     func._hidden = True
@@ -16,6 +14,17 @@ def hidden_method (func):
 
 
 class Book(ABC):
+    PARAM_SEARCH_PREFIX = 'search'
+    PARAM_UPDATE_PREFIX = 'update'
+
+    @classmethod
+    def get_search_prefix (cls):
+        return cls.PARAM_SEARCH_PREFIX
+
+    @classmethod
+    def get_update_prefix (cls):
+        return cls.PARAM_UPDATE_PREFIX
+
     def __init__ (self):
         self.records = []
 
@@ -40,8 +49,8 @@ class Book(ABC):
         conditions = {}
 
         for arg_key, arg_value in kwargs.items():
-            if arg_key.startswith(BookManager.get_search_prefix()):
-                conditions[arg_key.replace(BookManager.get_search_prefix(), '')] = arg_value
+            if arg_key.startswith(Book.get_search_prefix()):
+                conditions[arg_key.replace(Book.get_search_prefix(), '')] = arg_value
                 continue
 
         # looks for matching records and deletes them
@@ -84,11 +93,11 @@ class Book(ABC):
         fields_to_update = {}
 
         for arg_key, arg_value in kwargs.items():
-            if arg_key.startswith(BookManager.get_search_prefix()):
-                conditions[arg_key.replace(BookManager.get_search_prefix(), '')] = arg_value
+            if arg_key.startswith(Book.get_search_prefix()):
+                conditions[arg_key.replace(Book.get_search_prefix(), '')] = arg_value
                 continue
-            elif arg_key.startswith(BookManager.get_update_prefix()):
-                fields_to_update[arg_key.replace(BookManager.get_update_prefix(), '')] = arg_value
+            elif arg_key.startswith(Book.get_update_prefix()):
+                fields_to_update[arg_key.replace(Book.get_update_prefix(), '')] = arg_value
 
         """
         Example of 'conditions' param:
