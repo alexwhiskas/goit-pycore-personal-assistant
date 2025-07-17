@@ -18,7 +18,7 @@ def hidden_method (func):
 
 
 class Book(ABC):
-    PARAM_SEARCH_PREFIX = 'search'
+    PARAM_SEARCH_PREFIX = 'search_by'
     PARAM_UPDATE_PREFIX = 'update'
 
     PARAM_MULTI_VALUE_TO_SEARCH_PREFIX = 'old'
@@ -69,14 +69,14 @@ class Book(ABC):
                 continue
 
         # looks for matching records and deletes them
-        to_delete = [record for record in self.records if self._matches_conditions(record, conditions)]
+        records_to_delete = [record for record in self.records if self._matches_conditions(record, conditions)]
 
         # todo: add here prompt, list found records and ask to submit delete operation
-        for record in to_delete:
-            self.records.remove(record)
+        for record_to_delete in records_to_delete:
+            self.records.remove(record_to_delete)
 
         # returns amount of deleted records
-        return len(to_delete)
+        return len(records_to_delete)
 
     # def update_records (self, conditions: dict) -> list:
     def get_records (self, **kwargs) -> list:
@@ -91,6 +91,9 @@ class Book(ABC):
         for arg_key, arg_value in kwargs.items():
             if arg_key.startswith(Book.get_search_prefix()):
                 conditions[arg_key.replace(Book.get_search_prefix() + '_', '')] = arg_value
+                continue
+            if arg_key.startswith(Book.get_multi_value_to_search_prefix()):
+                conditions[arg_key.replace(Book.get_multi_value_to_search_prefix() + '_', '')] = arg_value
                 continue
 
         # returns a list of all records that match the conditions
@@ -110,6 +113,7 @@ class Book(ABC):
         """
         conditions = {}
         fields_to_update = {}
+        multi_field_values_to_replace = {}
 
         for arg_key, arg_value in kwargs.items():
             if arg_key.startswith(Book.get_search_prefix()):
@@ -117,14 +121,18 @@ class Book(ABC):
                 continue
             elif arg_key.startswith(Book.get_update_prefix()):
                 fields_to_update[arg_key.replace(Book.get_update_prefix() + '_', '')] = arg_value
+            elif arg_key.startswith(Book.get_multi_value_to_search_prefix()):
+                value_to_replace = arg_key.replace(Book.get_multi_value_to_search_prefix() + '_', '')
+                value_to_replace_by = arg_value.replace(Book.get_multi_value_to_update_prefix() + '_', '')
+                multi_field_values_to_replace[value_to_replace] = value_to_replace_by
 
         # returns a list of all records that match the conditions
         updated_records = []
 
         for record in self.records:
             if self._matches_conditions(record, conditions):
-                for field, value in fields_to_update:
-                    setattr(record, field, value)
+                for field, value in fields_to_update.items():
+                    record.fields[field] = value
                 updated_records.append(record)
 
         # todo: maybe output here the list of updated records info and return True?
@@ -166,7 +174,9 @@ class Book(ABC):
     def _matches_conditions (self, record, conditions: dict) -> bool:
         # checks whether a record matches all given field-value pairs
         for field, expected_value in conditions.items():
-            if not hasattr(record, field) or getattr(record, field) != expected_value:
+            if field in record.get_record_multi_value_fields() and record.get_multi_value_field_entries(field).get(expected_value) is None:
+                return False
+            elif not record.fields.get(field) or record.fields.get(field) != expected_value:
                 return False
 
         return True

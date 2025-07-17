@@ -120,6 +120,12 @@ class BookManager:
                     return func(*args, **kwargs)
                 else:
                     print('running nested field command')
+                    multi_value_fields = book.get_record_multi_value_fields()
+                    for multi_value_field in multi_value_fields:
+                        if func_name.endswith(multi_value_field):
+                            func_name = ''
+                            # todo: implement management of multi value fields
+
             elif hasattr(book, func_name) and callable(getattr(book, func_name)):
                 print('elif working')
                 func = getattr(book, func_name)  # gets the method
