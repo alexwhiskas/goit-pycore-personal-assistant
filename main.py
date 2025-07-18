@@ -3,10 +3,13 @@
 
 import signal
 import sys
+import shlex
+
 from functools import wraps
 
 from src.bot.book_manager import BookManager
 from src.core.record import Record
+from src.core.command_auto_complete.command_auto_complete import CommandAutoCompletion
 
 book_manager = BookManager()
 
@@ -37,23 +40,25 @@ def main ():
     supported_operations = book_manager.get_supported_operations()
 
     for cmd, params in supported_operations.items():
-        print(f' - {cmd}' + (f" {' '.join(f"{k}={v}" for k, v in params.items())}" if params else ""))
+        print(f' - {cmd}')
+        # uncomment if you need to check accepted by functions params
+        # print(f' - {cmd}' + (f" {' '.join(f"{k}={v}" for k, v in params.items())}" if params else ""))
 
     try:
+        command_autocompletion = CommandAutoCompletion(supported_operations.keys())
+
         while True:
-            user_input = input("Enter a command: ").strip().lower()
-            user_input_parts = user_input.split()
+            cmd = command_autocompletion.prompt_with_completion()
 
-            args = []
-            kwargs = {}
-            for arg in user_input_parts:
-                if '=' in arg:
-                    key, value = arg.split('=')
-                    kwargs[key] = value
-                else:
-                    args.append(arg)
+            if cmd in supported_operations:
+                cmd_params = supported_operations[cmd]
+                prompt_for_command_params = f' - Please enter following params: ' + (f"{' '.join(f"{k}={v}" for k, v in cmd_params.items())}" if params else "")
+                user_input_parts = input(prompt_for_command_params + "\n").strip()
+            else:
+                raise KeyError(f'Command "{cmd}" not found')
 
-            cmd = args.pop(0).strip().lower()
+            args = [] # todo: potentially redundant param, to delete
+            kwargs = dict(part.split("=", 1) for part in shlex.split(user_input_parts))
 
             command_result = book_manager.run_command(cmd, *args, **kwargs)
             if command_result is False:

@@ -1,7 +1,7 @@
 import difflib
 from typing import List, Optional, Tuple
 
-from src.core.book import hidden_method
+from src.core.decorators import hidden_method
 
 
 class CommandAutoCompletion:
@@ -52,13 +52,16 @@ class CommandAutoCompletion:
 
     @hidden_method
     def should_suggest(self, user_input: str) -> Tuple[bool, List[str]]:
-        matches = self.find_matches(user_input)
-
-        # Suggest if we have 2 or more matches OR if command seems incomplete
-        should_suggest = (
-                len(matches) >= 2 or
-                self.is_incomplete_command(user_input)
-        )
+        if user_input in self.commands:
+            should_suggest = False
+            matches = [user_input]
+        else:
+            matches = self.find_matches(user_input)
+            # Suggest if we have 2 or more matches OR if command seems incomplete
+            should_suggest = (
+                    len(matches) >= 2 or
+                    self.is_incomplete_command(user_input)
+            )
 
         return should_suggest, matches
 
@@ -75,20 +78,21 @@ class CommandAutoCompletion:
 
             if should_suggest and matches:
                 best_match = matches[0]
+                allowed_matches = matches[:self.count_matches]
 
                 print(f"\nDid you mean: '{best_match}'?")
                 question = "Accept suggestion? (yes/no): "
                 not_correct_message = "Please enter 'y' or 'n'"
                 if len(matches) > 1:
                     not_correct_message = "Please enter 'y', 'n' or one of the other options"
-                    question = "Accept suggestion or choose one of the other options? (yes/one of other option/no): "
-                    print(f"Other options: {', '.join(matches[1:3])}")  # Show up to 2 more
+                    question = "Accept suggestion or choose one of the other options? (yes/one_of_other_option/no): "
+                    print(f"Other options: {', '.join(allowed_matches[1:])}")  # Show up to configured amount of matches
 
                 choice = input(question).strip().lower()
 
                 if choice == 'yes':
                     return best_match
-                elif choice in matches[1:]:
+                elif choice in allowed_matches:
                     return choice
                 elif choice == 'no':
                     print("Please enter your command again:")
@@ -98,11 +102,7 @@ class CommandAutoCompletion:
                     return None
             else:
                 # No suggestions needed or no matches found
-                if user_input in self.commands:
+                if len(matches) == 1:
                     return user_input
-                elif not matches:
-                    print(f"Command '{user_input}' not found. Available commands (10 max matched):")
-                    print(", ".join(self.commands[:10]))  # Show first 10 commands
-                    return None
                 else:
-                    return user_input  # Accept as-is if only one match and complete
+                    return None  # return nothing

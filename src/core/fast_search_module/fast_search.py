@@ -6,8 +6,9 @@ from typing import Dict, List, Any, Set, Optional
 from datetime import datetime
 import math
 
-from src.modules.fast_search.decorators import handle_exceptions, validate_document, auto_save, validate_index_exists, cache_result
-from src.modules.fast_search.index_data import IndexData
+
+from src.core.fast_search_module.decorators import handle_exceptions, validate_document, auto_save, validate_index_exists, cache_result
+from src.core.fast_search_module.index_data import IndexData
 
 
 def _validate_document_against_mapping(document: Dict[str, Any], mapping: Dict[str, Any]):

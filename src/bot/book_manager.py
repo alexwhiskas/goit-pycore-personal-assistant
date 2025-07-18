@@ -79,9 +79,11 @@ class BookManager:
 
                 for operation_name in standard_ops:
                     params = {}
-                    command_name = f'{operation_name}-{book_name}-{record_class_multi_field.replace('_', '-')}'
+                    plural_part = ('s' if operation_name == 'get' else '')
+                    # e.g. get-notes-tags, get-contacts-phone-numbers
+                    command_name = f'{operation_name}-{book_name}{plural_part}-{record_class_multi_field.replace('_', '-')}{plural_part}'
 
-                    if operation_name in ['add', 'update', 'delete']:
+                    if operation_name in ['add', 'get', 'update', 'delete']:
                         for field_name in record_fields:
                             params.update({Book.get_search_prefix() + '_' + field_name: field_name})
 
@@ -121,15 +123,18 @@ class BookManager:
         for book_name, book in self.books.items():
             if hasattr(book, func_name) and callable(getattr(book, func_name)):
                 func = getattr(book, func_name)  # gets the method
+                break
             elif ('_' + book_name) in func_name:  # if '-contact' in 'add-contact' or 'get-contacts'
                 if not additional_params:
                     func_name = func_name.replace(book_name, 'record')
                     func = getattr(book, func_name)  # gets the method
+                    break
                 else:
                     multi_value_fields = book.get_record_multi_value_fields()
                     for multi_value_field in multi_value_fields:
                         if func_name.endswith(multi_value_field):
                             func = getattr(book, 'update_records')
+                            break
 
         if func is None:
             return False
