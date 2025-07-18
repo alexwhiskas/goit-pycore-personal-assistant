@@ -81,11 +81,15 @@ class BookManager:
                     params = {}
                     command_name = f'{operation_name}-{book_name}-{record_class_multi_field.replace('_', '-')}'
 
-                    if operation_name in ['add', 'update', 'get', 'delete']:
+                    if operation_name in ['add', 'update', 'delete']:
                         for field_name in record_fields:
                             params.update({Book.get_search_prefix() + '_' + field_name: field_name})
 
-                        params.update({record_class_multi_field:record_class_multi_field})
+                        if operation_name in ['add', 'update']:
+                            params.update({Book.get_multi_value_to_update_prefix() + '_' + record_class_multi_field: record_class_multi_field})
+
+                        if operation_name != 'add':
+                            params.update({Book.get_multi_value_to_search_prefix() + '_' + record_class_multi_field: record_class_multi_field})
 
                     commands[command_name] = params
 
@@ -111,25 +115,24 @@ class BookManager:
         additional_params = command_name.split("-")[2:]  # ['phone', 'number']
         func_name = command_name.replace('-', '_')
 
+        func = None
         for book_name, book in self.books.items():
-            if ('_' + book_name) in func_name:  # if '-contact' in 'add-contact' or 'get-contacts'
+            if hasattr(book, func_name) and callable(getattr(book, func_name)):
+                func = getattr(book, func_name)  # gets the method
+            elif ('_' + book_name) in func_name:  # if '-contact' in 'add-contact' or 'get-contacts'
                 if not additional_params:
                     func_name = func_name.replace(book_name, 'record')
-                    print('running main command:', func_name)
                     func = getattr(book, func_name)  # gets the method
-                    return func(*args, **kwargs)
                 else:
-                    print('running nested field command')
                     multi_value_fields = book.get_record_multi_value_fields()
                     for multi_value_field in multi_value_fields:
                         if func_name.endswith(multi_value_field):
-                            func_name = ''
-                            # todo: implement management of multi value fields
+                            func = getattr(book, 'update_records')
 
-            elif hasattr(book, func_name) and callable(getattr(book, func_name)):
-                print('elif working')
-                func = getattr(book, func_name)  # gets the method
-                return func(*args, **kwargs)
+        if func is None:
+            return False
+        else:
+            return {'function_name': func_name, 'result': func(*args, **kwargs)}
 
     def _get_book_operation_params (self, book_name: str = '', method_name: str = '') -> dict:
         params = {}

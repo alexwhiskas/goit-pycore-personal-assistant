@@ -1,36 +1,33 @@
 # src/core/books/contact/contact_record.py
 
-from src.core.book import hidden_method
+from src.core.decorators import hidden_method
+
 from src.core.record import Record
 
 
 class ContactRecord(Record):
     # ---------- Static Methods ----------
-    @staticmethod
+    @classmethod
     @hidden_method
-    def get_record_fields () -> list:
+    def get_record_fields (cls) -> list:
         return ['firstname', 'lastname', 'address', 'email', 'birthday']
 
-    @staticmethod
+    @classmethod
     @hidden_method
-    def get_record_multi_value_fields () -> list[str]:
+    def get_record_multi_value_fields (cls) -> list[str]:
         return ['phone_number']
 
-    @staticmethod
+    @classmethod
     @hidden_method
-    def get_record_required_fields () -> list[str]:
+    def get_record_required_fields (cls) -> list[str]:
         return ['firstname', 'lastname']
 
     # ---------- Validation Helpers ----------
     def validate_email (self, email):
-        return True  # todo: add email validation here, raise error in case of wrong value
+        return email  # todo: add email validation here, raise error in case of wrong value
 
     def validate_birthday (self, birthday):
-        return True  # todo: add birthday validation here, raise error in case of wrong value
+        return birthday  # todo: add birthday validation here, raise error in case of wrong value
 
     def validate_phone_number (self, phone_number):
-        return True  # todo: add phone number validation here, raise error in case of wrong value
-
-    # ---------- Utility ----------
-    # def __str__ (self):
-    #     return f'' # todo: implement
+        return phone_number  # todo: add phone number validation here, raise error in case of wrong value

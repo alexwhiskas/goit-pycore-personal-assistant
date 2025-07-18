@@ -1,15 +1,35 @@
 # src/core/record.py
+
+
 from abc import abstractmethod, ABC
 
-from src.core.book import hidden_method
+from src.core.decorators import hidden_method
 
 
 class Record(ABC):
+    @classmethod
+    @hidden_method
+    @abstractmethod
+    def get_record_fields (cls) -> list[str]:
+        pass
+
+    @classmethod
+    @hidden_method
+    @abstractmethod
+    def get_record_required_fields (cls) -> list[str]:
+        pass
+
+    @classmethod
+    @hidden_method
+    @abstractmethod
+    def get_record_multi_value_fields (cls) -> list[str]:
+        pass
+
     def __init__ (self, **kwargs):
         self.fields = {}
         self.multi_value_fields = {}
 
-        valid_fields = self.get_record_fields()
+        valid_fields = self.get_record_fields() + self.get_record_multi_value_fields()
         unsupported_fields = [key for key in kwargs if key not in valid_fields]
 
         if unsupported_fields:
@@ -31,7 +51,7 @@ class Record(ABC):
                 else:
                     self.multi_value_fields[multi_value_field][kwargs[multi_value_field]] = kwargs[multi_value_field]
 
-        for field in valid_fields:
+        for field in self.get_record_fields():
             if field in kwargs:
                 value = kwargs[field]
 
@@ -43,24 +63,6 @@ class Record(ABC):
                     value = validator(value)
 
                 self.fields[field] = value  # setting values like this to trigger setters
-
-    @staticmethod
-    @hidden_method
-    @abstractmethod
-    def get_record_fields () -> list[str]:
-        pass
-
-    @staticmethod
-    @hidden_method
-    @abstractmethod
-    def get_record_required_fields () -> list[str]:
-        pass
-
-    @staticmethod
-    @hidden_method
-    @abstractmethod
-    def get_record_multi_value_fields () -> list[str]:
-        pass
 
     def add_multi_value_field_entry (self, multi_field_name: str, value):
         self._init_multi_value_field(multi_field_name)
@@ -89,3 +91,20 @@ class Record(ABC):
     def _init_multi_value_field (self, multi_field_name: str):
         if multi_field_name not in self.multi_value_fields:
             self.multi_value_fields[multi_field_name] = []
+
+    # ---------- Utility ----------
+    def __str__ (self) -> str:
+        lines = [f"{self.__class__.__name__}:"]
+
+        # fields values
+        for key, value in self.fields.items():
+            lines.append(f"  {key}: {value}")
+
+        # multi-value fields
+        if self.multi_value_fields:
+            for key, subdict in self.multi_value_fields.items():
+                lines.append(f'  {key}:')
+                for v in subdict:
+                    lines.append(f"    {v}")
+
+        return '\n'.join(lines)
