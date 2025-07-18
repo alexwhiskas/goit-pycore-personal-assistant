@@ -1,26 +1,22 @@
 # src/core/books/note/note_record.py
 
-from src.core.book import hidden_method
+from src.core.decorators import hidden_method
 from src.core.record import Record
 
 
 class NoteRecord(Record):
     # ---------- Static Methods ----------
-    @staticmethod
+    @classmethod
     @hidden_method
-    def get_record_fields () -> list:
+    def get_record_fields (cls) -> list:
         return ['title', 'body']
 
-    @staticmethod
+    @classmethod
     @hidden_method
-    def get_record_multi_value_fields () -> list[str]:
+    def get_record_multi_value_fields (cls) -> list[str]:
         return ['tag']
 
-    @staticmethod
+    @classmethod
     @hidden_method
-    def get_record_required_fields () -> list[str]:
+    def get_record_required_fields (cls) -> list[str]:
         return ['title', 'body']
-
-    # ---------- Utility ----------
-    # def __str__ (self):
-    #     return f'' # todo: implement

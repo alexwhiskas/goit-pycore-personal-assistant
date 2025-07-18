@@ -6,6 +6,7 @@ import sys
 from functools import wraps
 
 from src.bot.book_manager import BookManager
+from src.core.record import Record
 
 book_manager = BookManager()
 
@@ -59,6 +60,17 @@ def main ():
                 break
             else:
                 if command_result is not True:
+                    if (isinstance(command_result, dict)
+                        and 'function_name' in command_result
+                        and 'result' in command_result
+                    ):
+                        if isinstance(command_result['result'], list) and all(isinstance(r, Record) for r in command_result['result']):
+                            print(f"Function '{command_result['function_name']}' returned {len(command_result['result'])} record(s):")
+
+                            for record in command_result['result']:
+                                print(record)
+                                print("-" * 30)
+                else:
                     print(command_result)
     finally:
         book_manager.save_books_state()

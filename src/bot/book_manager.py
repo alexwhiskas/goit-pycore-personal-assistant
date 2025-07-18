@@ -70,24 +70,28 @@ class BookManager:
                 cmd = method_to_process.replace('record', book_name).replace('_', '-')
                 commands[cmd] = method_acceptable_params
 
+            # for children fields operations - show all record fields to search by
+            record_fields = self.books[book_name].get_record_class_fields() + book.get_record_class_fields()
+
             # child fields operations
             for record_class_multi_field in book.get_record_multi_value_fields():
-                standard_ops = ['add', 'update', 'delete', 'get']
+                standard_ops = ['add', 'update', 'get', 'delete']
 
                 for operation_name in standard_ops:
                     params = {}
                     command_name = f'{operation_name}-{book_name}-{record_class_multi_field.replace('_', '-')}'
 
-                    if operation_name == 'add':
-                        params.update({record_class_multi_field:record_class_multi_field})
-                    else:
-                        # for operations which require search operations - show fields to search by
-                        if operation_name in ['update', 'get', 'delete']:
-                            params.update({Book.get_search_prefix() + '_' + record_class_multi_field: record_class_multi_field})
+                    if operation_name in ['add', 'update', 'delete']:
+                        for field_name in record_fields:
+                            params.update({Book.get_search_prefix() + '_' + field_name: field_name})
 
-                            # for update operations - show fields user can modify
-                            if operation_name in ['update']:
-                                params.update({Book.get_update_prefix() + '_' + record_class_multi_field: record_class_multi_field})
+                        if operation_name in ['add', 'update']:
+                            params.update({Book.get_multi_value_to_update_prefix() + '_' + record_class_multi_field: record_class_multi_field})
+
+                        if operation_name == 'update':
+                            params.update({Book.get_multi_value_to_search_prefix() + '_' + record_class_multi_field: record_class_multi_field})
+                        if operation_name == 'delete':
+                            params.update({Book.get_multi_value_to_delete_prefix() + '_' + record_class_multi_field: record_class_multi_field})
 
                     commands[command_name] = params
 
@@ -100,8 +104,10 @@ class BookManager:
             # checking only public methods
             if method_name.startswith('_') is False:
                 method = getattr(book, method_name)
-                # preparing for processing only not hidden from bot user functions
-                if callable(getattr(book, method_name)) and getattr(method, '_hidden', False) is not True:
+                # preparing for processing only not static and not hidden from bot user functions
+                if (callable(getattr(book, method_name))
+                        and getattr(method, '_hidden', False) is not True
+                        and not isinstance(inspect.getattr_static(book, method_name), classmethod)):
                     methods_to_process.append(method_name)
 
         return methods_to_process
@@ -111,60 +117,78 @@ class BookManager:
         additional_params = command_name.split("-")[2:]  # ['phone', 'number']
         func_name = command_name.replace('-', '_')
 
+        func = None
         for book_name, book in self.books.items():
-            if ('_' + book_name) in func_name:  # if '-contact' in 'add-contact' or 'get-contacts'
+            if hasattr(book, func_name) and callable(getattr(book, func_name)):
+                func = getattr(book, func_name)  # gets the method
+            elif ('_' + book_name) in func_name:  # if '-contact' in 'add-contact' or 'get-contacts'
                 if not additional_params:
                     func_name = func_name.replace(book_name, 'record')
-                    print('running main command:', func_name)
                     func = getattr(book, func_name)  # gets the method
-                    return func(*args, **kwargs)
                 else:
-                    print('running nested field command')
-            elif hasattr(book, func_name) and callable(getattr(book, func_name)):
-                print('elif working')
-                func = getattr(book, func_name)  # gets the method
-                return func(*args, **kwargs)
+                    multi_value_fields = book.get_record_multi_value_fields()
+                    for multi_value_field in multi_value_fields:
+                        if func_name.endswith(multi_value_field):
+                            func = getattr(book, 'update_records')
+
+        if func is None:
+            return False
+        else:
+            return {'function_name': func_name, 'result': func(*args, **kwargs)}
 
     def _get_book_operation_params (self, book_name: str = '', method_name: str = '') -> dict:
         params = {}
-
         method_name_parts = method_name.split("_")
         operation_name = method_name_parts[0]
-
         module_path = f'src.core.books.{book_name}.{book_name}'
+        book = self.books[book_name]
+        attr = getattr(book, method_name)
 
-        # for add operations - show all record fields
-        record_fields = self.books[book_name].get_record_class_fields()
-        if operation_name == 'add':
-            params.update({record_field:record_field for record_field in record_fields})
+        if callable(attr) and getattr(attr, '_method_args_as_command_params', False) is True:
+            params = self._generate_params_from_method_args(module_path, book_name, method_name)
         else:
-            # for operations which require search operations - show fields to search by
-            if operation_name in ['update', 'get', 'delete']:
-                for field_name in record_fields:
-                    params.update({Book.get_search_prefix() + '_' + field_name: field_name})
+            # record fields should be included as searchable
+            record_fields = book.get_record_class_fields() + book.get_record_multi_value_fields()
+            if operation_name == 'add':
+                params.update({record_field:record_field for record_field in record_fields})
+            else:
+                # for operations which require search operations - show fields to search by
+                if operation_name in ['update', 'get', 'delete']:
+                    for field_name in record_fields:
+                        params.update({Book.get_search_prefix() + '_' + field_name: field_name})
 
-                    # for update operations - show fields user can modify
-                    if operation_name in ['update']:
-                        params.update({Book.get_update_prefix() + '_' + field_name: field_name})
+                        # for update operations - show also multi value fields user can modify
+                        if operation_name == 'update':
+                            if field_name in book.get_record_multi_value_fields():
+                                params.update({Book.get_multi_value_to_search_prefix() + '_' + field_name: field_name})
+                                params.update({Book.get_multi_value_to_update_prefix() + '_' + field_name: field_name})
+                            else:
+                                params.update({Book.get_update_prefix() + '_' + field_name: field_name})
 
-        # if not generic record operations - show function arguments as commands params
-        if len(params) == 0:
-            module_path += '_book'
-            module = importlib.import_module(module_path)
-            class_name = book_name.capitalize() + 'Book'
-            record_class = getattr(module, class_name)
-            sig = inspect.signature(record_class.__init__)
+            # if not generic record operations - show function arguments as commands params
+            if len(params) == 0:
+                params = self._generate_params_from_method_args(module_path, book_name, operation_name)
 
-            # get the method by name (could be 'add_record', 'get_records', etc.)
-            method = getattr(class_name, operation_name, None)
-            if method is not None:
-                # inspect the method signature
-                sig = inspect.signature(method)
-                # return list of parameter names (skip 'self' or 'cls')
-                params = {
-                    f'{name}={name}'
-                    for name in sig.parameters
-                    if name not in ['self', 'cls']
-                }
+        return params
+
+    def _generate_params_from_method_args(self, module_path, book_name, operation_name):
+        params = {}
+        module_path += '_book'
+        module = importlib.import_module(module_path)
+        class_name = book_name.capitalize() + 'Book'
+        record_class = getattr(module, class_name)
+        # sig = inspect.signature(record_class.__init__)
+
+        # get the method by name (could be 'add_record', 'get_records', etc.)
+        method = getattr(record_class, operation_name, None)
+        if method is not None:
+            # inspect the method signature
+            sig = inspect.signature(method)
+            # return list of parameter names (skip 'self' or 'cls')
+            params = {
+                name: name
+                for name in sig.parameters
+                if name not in ['self', 'cls']
+            }
 
         return params

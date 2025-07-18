@@ -1,6 +1,7 @@
 # src/core/books/contact/contact_record.py
 
-from src.core.book import hidden_method
+from src.core.decorators import hidden_method
+
 from src.core.record import Record
 import re
 from datetime import datetime
@@ -8,20 +9,19 @@ from datetime import datetime
 
 class ContactRecord(Record):
     # ---------- Static Methods ----------
-    @staticmethod
+    @classmethod
     @hidden_method
-    def get_record_fields () -> list:
-        return ['firstname', 'lastname', 'address', 'email', 'birthday']
+    def get_record_fields (cls) -> list:
         return ['firstname', 'lastname', 'address', 'email', 'birthday']
 
-    @staticmethod
+    @classmethod
     @hidden_method
-    def get_record_multi_value_fields () -> list[str]:
+    def get_record_multi_value_fields (cls) -> list[str]:
         return ['phone_number']
 
-    @staticmethod
+    @classmethod
     @hidden_method
-    def get_record_required_fields () -> list[str]:
+    def get_record_required_fields (cls) -> list[str]:
         return ['firstname', 'lastname']
 
     # ---------- Validation Helpers ----------
@@ -32,7 +32,6 @@ class ContactRecord(Record):
             return email  # Повертаємо очищений email, якщо він валідний
         else:
             return None  # Повертаємо None, якщо невалідний
-
 
     def validate_birthday (self, birthday):
         try:
@@ -66,7 +65,3 @@ class ContactRecord(Record):
         third = clean_numbers[10:12]
 
         return f"{country}({operator}){first}-{second}-{third}" # Повертаємо адекватний номер 
-
-    # ---------- Utility ----------
-    # def __str__ (self):
-    #     return f'' # todo: implement
