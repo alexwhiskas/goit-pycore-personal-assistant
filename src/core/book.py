@@ -16,6 +16,7 @@ class Book(ABC):
 
     PARAM_MULTI_VALUE_TO_SEARCH_PREFIX = 'old'
     PARAM_MULTI_VALUE_TO_UPDATE_PREFIX = 'new'
+    PARAM_MULTI_VALUE_TO_DELETE_PREFIX = 'delete'
 
     @classmethod
     def get_search_prefix (cls):
@@ -32,6 +33,10 @@ class Book(ABC):
     @classmethod
     def get_multi_value_to_update_prefix (cls):
         return cls.PARAM_MULTI_VALUE_TO_UPDATE_PREFIX
+
+    @classmethod
+    def get_multi_value_to_delete_prefix (cls):
+        return cls.PARAM_MULTI_VALUE_TO_DELETE_PREFIX
 
     @classmethod
     def get_record_class_fields (cls):
@@ -138,6 +143,7 @@ class Book(ABC):
         conditions = {}
         fields_to_update = {}
         multi_field_values_to_update = {}
+        multi_field_values_to_delete = {}
         multi_values_fields = self.get_record_multi_value_fields()
 
         for arg_key, arg_value in kwargs.items():
@@ -155,6 +161,9 @@ class Book(ABC):
                     multi_field_values_to_update.setdefault(multi_value_field_name, {})[arg_value] = value_to_replace_by
                 else:
                     raise ValueError('You didn\'t provided value to update/insert for multi value field: ' + multi_value_field_name)
+            elif arg_key.startswith(Book.get_multi_value_to_delete_prefix()):
+                multi_value_field_name = arg_key.replace(Book.get_multi_value_to_delete_prefix() + '_', '')
+                multi_field_values_to_delete.setdefault(multi_value_field_name, {})[arg_value] = arg_value
             elif arg_key in multi_values_fields:
                 multi_field_values_to_update.setdefault(arg_key, {})[''] = arg_value
 
@@ -172,6 +181,10 @@ class Book(ABC):
 
                         record.multi_value_fields.setdefault(multi_value_field_name, {}).pop(multi_value_field_value_to_replace, None)
                         record.multi_value_fields[multi_value_field_name][new_multi_value_field_value] = new_multi_value_field_value
+
+                for multi_value_field_name_to_delete, multi_field_values_to_delete in multi_field_values_to_delete.items():
+                    for multi_value_field_value_to_delete in multi_field_values_to_delete:
+                        record.multi_value_fields.setdefault(multi_value_field_name_to_delete, {}).pop(multi_value_field_value_to_delete, None)
 
                 updated_records.append(record)
 

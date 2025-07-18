@@ -88,8 +88,10 @@ class BookManager:
                         if operation_name in ['add', 'update']:
                             params.update({Book.get_multi_value_to_update_prefix() + '_' + record_class_multi_field: record_class_multi_field})
 
-                        if operation_name != 'add':
+                        if operation_name == 'update':
                             params.update({Book.get_multi_value_to_search_prefix() + '_' + record_class_multi_field: record_class_multi_field})
+                        if operation_name == 'delete':
+                            params.update({Book.get_multi_value_to_delete_prefix() + '_' + record_class_multi_field: record_class_multi_field})
 
                     commands[command_name] = params
 
@@ -155,7 +157,7 @@ class BookManager:
                     for field_name in record_fields:
                         params.update({Book.get_search_prefix() + '_' + field_name: field_name})
 
-                        # for update operations - show fields user can modify
+                        # for update operations - show also multi value fields user can modify
                         if operation_name == 'update':
                             if field_name in book.get_record_multi_value_fields():
                                 params.update({Book.get_multi_value_to_search_prefix() + '_' + field_name: field_name})
