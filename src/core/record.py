@@ -13,7 +13,7 @@ class Record(ABC):
         unsupported_fields = [key for key in kwargs if key not in valid_fields]
 
         if unsupported_fields:
-            raise ValueError(f'Unsupported field(s): {', '.join(unsupported_fields)}')
+            raise ValueError(f"Unsupported field(s): {', '.join(unsupported_fields)}")
 
         required_fields = self.get_record_required_fields()
         missing_required_fields = [
@@ -21,7 +21,7 @@ class Record(ABC):
             if field not in kwargs or not kwargs[field]
         ]
         if missing_required_fields:
-            raise ValueError(f'Missing required field(s): {', '.join(missing_required_fields)}')
+            raise ValueError(f"Missing required field(s): {', '.join(missing_required_fields)}")
 
         # initializing multi value fields
         for multi_value_field in self.get_record_multi_value_fields():
@@ -69,7 +69,7 @@ class Record(ABC):
     def update_multi_value_field_entry (self, multi_field_name: str, old_value, new_value):
         self._init_multi_value_field(multi_field_name)
         if old_value not in self._multi_value_fields[multi_field_name]:
-            raise ValueError(f'Old value {old_value} not found in {multi_field_name}')
+            raise ValueError(f"Old value {old_value} not found in {multi_field_name}")
 
         self._multi_value_fields[multi_field_name][old_value] = new_value
 
@@ -77,9 +77,10 @@ class Record(ABC):
         self._init_multi_value_field(multi_field_name)
 
         if value not in self._multi_value_fields[multi_field_name]:
-            raise ValueError(f'{value} not found in {multi_field_name}')
+            raise ValueError(f"{value} not found in {multi_field_name}")
 
-        self._multi_value_fields[multi_field_name].remove(value)
+        # Use .pop() for dictionary instead of .remove() for list
+        self._multi_value_fields[multi_field_name].pop(value)
 
     def get_multi_value_field_entries (self, multi_field_name: str):
         self._init_multi_value_field(multi_field_name)
@@ -88,4 +89,5 @@ class Record(ABC):
 
     def _init_multi_value_field (self, multi_field_name: str):
         if multi_field_name not in self._multi_value_fields:
-            self._multi_value_fields[multi_field_name] = []
+            # Initialize as dictionary, not list
+            self._multi_value_fields[multi_field_name] = {}

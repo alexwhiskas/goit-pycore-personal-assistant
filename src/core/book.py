@@ -7,7 +7,14 @@ import inspect
 import pickle
 from pathlib import Path
 
-from src.bot.book_manager import BookManager
+PARAM_SEARCH_PREFIX = 'search'
+PARAM_UPDATE_PREFIX = 'update'
+
+def get_search_prefix (cls=None):
+    return PARAM_SEARCH_PREFIX
+
+def get_update_prefix (cls=None):
+    return PARAM_UPDATE_PREFIX
 
 
 def hidden_method (func):
@@ -40,9 +47,8 @@ class Book(ABC):
         conditions = {}
 
         for arg_key, arg_value in kwargs.items():
-            if arg_key.startswith(BookManager.get_search_prefix()):
-                conditions[arg_key.replace(BookManager.get_search_prefix(), '')] = arg_value
-                continue
+            if arg_key.startswith(get_search_prefix()):
+                conditions[arg_key.replace(get_search_prefix() + '_', '')] = arg_value
 
         # looks for matching records and deletes them
         to_delete = [record for record in self.records if self._matches_conditions(record, conditions)]
@@ -55,23 +61,6 @@ class Book(ABC):
         return len(to_delete)
 
     # def update_records (self, conditions: dict) -> list:
-    def get_records (self, **kwargs) -> list:
-        """
-        Example of 'conditions' param:
-        conditions = {
-            "firstname": "Alice",
-            "lastname": "Smith"
-        }
-        """
-        conditions = kwargs
-
-        # returns a list of all records that match the conditions
-        found_records = [record for record in self.records if self._matches_conditions(record, conditions)]
-
-        # todo: maybe output here the list of found records info and return True?
-        return found_records
-
-    # def update_records (self, conditions: dict, fields_to_update: dict[str, str]) -> list:
     def update_records (self, **kwargs) -> list:
         """
         Example of 'conditions' and 'fields_to_update' vars contents:
@@ -84,26 +73,19 @@ class Book(ABC):
         fields_to_update = {}
 
         for arg_key, arg_value in kwargs.items():
-            if arg_key.startswith(BookManager.get_search_prefix()):
-                conditions[arg_key.replace(BookManager.get_search_prefix(), '')] = arg_value
+            if arg_key.startswith(get_search_prefix()):
+                conditions[arg_key.replace(get_search_prefix() + '_', '')] = arg_value
                 continue
-            elif arg_key.startswith(BookManager.get_update_prefix()):
-                fields_to_update[arg_key.replace(BookManager.get_update_prefix(), '')] = arg_value
-
-        """
-        Example of 'conditions' param:
-        conditions = {
-            "firstname": "Alice",
-            "lastname": "Smith"
-        }
-        """
+            elif arg_key.startswith(get_update_prefix()):
+                fields_to_update[arg_key.replace(get_update_prefix() + '_', '')] = arg_value
 
         # returns a list of all records that match the conditions
         updated_records = []
 
         for record in self.records:
             if self._matches_conditions(record, conditions):
-                for field, value in fields_to_update:
+                # Fix: iterate over dictionary items, not the dictionary itself
+                for field, value in fields_to_update.items():
                     setattr(record, field, value)
                 updated_records.append(record)
 

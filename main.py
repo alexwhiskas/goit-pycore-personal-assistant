@@ -36,23 +36,32 @@ def main ():
     supported_operations = book_manager.get_supported_operations()
 
     for cmd, params in supported_operations.items():
-        print(f' - {cmd}' + (f" {' '.join(f"{k}={v}" for k, v in params.items())}" if params else ""))
+        print(f" - {cmd}" + (f" {' '.join(f'{k}={v}' for k, v in params.items())}" if params else ""))
 
     try:
         while True:
             user_input = input("Enter a command: ").strip().lower()
+            if not user_input:
+                continue
+                
             user_input_parts = user_input.split()
 
             args = []
             kwargs = {}
-            for arg in user_input_parts:
+            cmd = None
+            
+            for i, arg in enumerate(user_input_parts):
                 if '=' in arg:
-                    key, value = arg.split('=')
+                    key, value = arg.split('=', 1)  # Split only on first '='
                     kwargs[key] = value
+                elif i == 0:  # First argument is always the command
+                    cmd = arg.strip().lower()
                 else:
                     args.append(arg)
 
-            cmd = args.pop(0).strip().lower()
+            if not cmd:
+                print("Please enter a command")
+                continue
 
             command_result = book_manager.run_command(cmd, *args, **kwargs)
             if command_result is False:

@@ -5,22 +5,11 @@ import inspect
 import pickle
 from pathlib import Path
 from typing import Dict
-from src.core.book import Book
+from src.core.book import Book, get_search_prefix, get_update_prefix
 
 
 class BookManager:
-    PARAM_SEARCH_PREFIX = 'search'
-    PARAM_UPDATE_PREFIX = 'update'
-
     books: Dict[str, Book] = {}
-
-    @classmethod
-    def get_search_prefix (cls):
-        return cls.PARAM_SEARCH_PREFIX
-
-    @classmethod
-    def get_update_prefix (cls):
-        return cls.PARAM_UPDATE_PREFIX
 
     def __init__ (self):
         self.books = {}
@@ -87,18 +76,18 @@ class BookManager:
 
                 for operation_name in standard_ops:
                     params = {}
-                    command_name = f'{operation_name}-{book_name}-{record_class_multi_field.replace('_', '-')}'
+                    command_name = f"{operation_name}-{book_name}-{record_class_multi_field.replace('_', '-')}"
 
                     if operation_name == 'add':
                         params.update({record_class_multi_field:record_class_multi_field})
                     else:
                         # for operations which require search operations - show fields to search by
                         if operation_name in ['update', 'get', 'delete']:
-                            params.update({BookManager.get_search_prefix() + '_' + record_class_multi_field: record_class_multi_field})
+                            params.update({get_search_prefix(Book) + '_' + record_class_multi_field: record_class_multi_field})
 
                             # for update operations - show fields user can modify
                             if operation_name in ['update']:
-                                params.update({BookManager.get_update_prefix() + '_' + record_class_multi_field: record_class_multi_field})
+                                params.update({get_update_prefix(Book) + '_' + record_class_multi_field: record_class_multi_field})
 
                     commands[command_name] = params
 
@@ -131,10 +120,15 @@ class BookManager:
                     return func(*args, **kwargs)
                 else:
                     print('running nested field command')
+                    # Handle nested field commands (add-contact-phone, etc.)
+                    # Implementation needed for multi-value field operations
+                    return f"Multi-value field commands not yet implemented for: {command_name}"
             elif hasattr(book, func_name) and callable(getattr(book, func_name)):
                 print('elif working')
                 func = getattr(book, func_name)  # gets the method
                 return func(*args, **kwargs)
+        
+        return f"Unknown command: {command_name}"
 
     def _get_book_operation_params (self, book_name: str = '', method_name: str = '') -> dict:
         params = {}
@@ -152,23 +146,22 @@ class BookManager:
             # for operations which require search operations - show fields to search by
             if operation_name in ['update', 'get', 'delete']:
                 for field_name in record_fields:
-                    params.update({BookManager.get_search_prefix() + '_' + field_name: field_name})
+                    params.update({get_search_prefix(Book) + '_' + field_name: field_name})
 
                     # for update operations - show fields user can modify
                     if operation_name in ['update']:
-                        params.update({BookManager.get_update_prefix() + '_' + field_name: field_name})
+                        params.update({get_update_prefix(Book) + '_' + field_name: field_name})
 
         # if not generic record operations - show function arguments as commands params
         if len(params) == 0:
             module_path += '_book'
             module = importlib.import_module(module_path)
             class_name = book_name.capitalize() + 'Book'
-            record_class = getattr(module, class_name)
-            sig = inspect.signature(record_class.__init__)
+            book_class = getattr(module, class_name)
 
             # get the method by name (could be 'add_record', 'get_records', etc.)
-            method = getattr(class_name, operation_name, None)
-            if method is not None:
+            if hasattr(book_class, method_name):
+                method = getattr(book_class, method_name)
                 # inspect the method signature
                 sig = inspect.signature(method)
                 # return list of parameter names (skip 'self' or 'cls')
@@ -179,3 +172,4 @@ class BookManager:
                 }
 
         return params
+
