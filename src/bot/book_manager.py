@@ -4,8 +4,11 @@ import importlib
 import inspect
 import pickle
 from pathlib import Path
-from typing import Dict
+from typing import Dict, List
 from src.core.book import Book
+from src.core.record import Record
+from src.core.fast_search_adapter import FastSearchAdapter
+from colorama import Fore, Style
 
 
 class BookManager:
@@ -13,7 +16,11 @@ class BookManager:
 
     def __init__ (self):
         self.books = {}
+        # Get the fast search adapter instance
+        self.fast_search = FastSearchAdapter.get_instance()
         self._load_books()
+        # Initialize search indexes for all books
+        self._initialize_search_indexes()
 
     def _load_books (self):
         books_root = Path(__file__).parent.parent / 'core' / 'books'
@@ -40,6 +47,22 @@ class BookManager:
                     #         self.books[book_name] = pickle.load(f)
                     # except FileNotFoundError:
                     #     self.books[book_name] = bookInstance  # e.g. "contact": ContactBook()
+
+    def _initialize_search_indexes(self):
+        """Initialize search indexes for all books"""
+        print(f"{Fore.BLUE}🔍 Initializing search indexes...{Style.RESET_ALL}")
+        for book_name, book in self.books.items():
+            fields = book.get_record_class_fields()
+            multi_value_fields = book.get_record_multi_value_fields()
+
+            # Initialize the index for this book type
+            self.fast_search.initialize_book_index(book_name, fields, multi_value_fields)
+
+            # Index all existing records
+            for record in book.records:
+                self.fast_search.index_record(book_name, record)
+
+        print(f"{Fore.GREEN}✅ Search indexes initialized{Style.RESET_ALL}")
 
     def save_books_state (self):
         pass
@@ -79,7 +102,7 @@ class BookManager:
 
                 for operation_name in standard_ops:
                     params = {}
-                    command_name = f'{operation_name}-{book_name}-{record_class_multi_field.replace('_', '-')}'
+                    command_name = f"{operation_name}-{book_name}-{record_class_multi_field.replace('_', '-')}"
 
                     if operation_name in ['add', 'update', 'delete']:
                         for field_name in record_fields:
@@ -112,7 +135,63 @@ class BookManager:
 
         return methods_to_process
 
-    def run_command (self, command_name: str, *args, **kwargs):
+    def run_command(self, command_name: str, *args, **kwargs):
+        # Check if this is a global search command
+        if command_name == 'search-all':
+            query = kwargs.get('query', '')
+
+            if not query and args:
+                query = args[0]  # Use first positional arg as query
+
+            # Perform global search across all books
+            try:
+                all_results = self.global_search(query)
+                return {'function_name': 'global_search', 'result': all_results}
+            except ValueError as e:
+                return {'function_name': 'error_global_search', 'result': str(e)}
+
+        # Check if this is a book-specific search command
+        elif command_name.startswith('search-'):
+            # Extract book name from command
+            parts = command_name.split('-')
+            if len(parts) < 2:
+                return False
+
+            book_name = parts[1]
+            query = kwargs.get('query', '')
+
+            if not query and args:
+                query = args[0]  # Use first positional arg as query
+
+            # Get the book
+            try:
+                book = self.get_book(book_name)
+
+                # Perform the search
+                results = book.search_records(query)
+
+                # If no results were found but we have records, try doing a simple text match
+                if not results and book.records and len(query) >= FastSearchAdapter.MIN_SEARCH_LENGTH:
+                    for record in book.records:
+                        # Check if query appears in any field value
+                        for field, value in record.fields.items():
+                            if query.lower() in str(value).lower():
+                                results.append(record)
+                                break
+
+                        # Also check multi-value fields
+                        if not results:
+                            for field, values in record.multi_value_fields.items():
+                                if isinstance(values, dict) and any(query.lower() in k.lower() for k in values.keys()):
+                                    results.append(record)
+                                    break
+
+                return {'function_name': f'search_{book_name}', 'result': results}
+            except ValueError as e:
+                return {'function_name': f'error_search_{book_name}', 'result': str(e)}
+            except Exception as e:
+                return {'function_name': f'error_search_{book_name}', 'result': f"Error searching: {str(e)}"}
+
         # dispatches and runs a command like 'add-contact' or 'add-note-tag'
         additional_params = command_name.split("-")[2:]  # ['phone', 'number']
         func_name = command_name.replace('-', '_')
@@ -192,3 +271,74 @@ class BookManager:
             }
 
         return params
+
+    def print_commands(self, block=None):
+        """Print all supported commands or commands for a specific block"""
+        supported_operations = self.get_supported_operations()
+
+        # Group commands by book type for better organization
+        grouped_commands = {}
+        for cmd, params in supported_operations.items():
+            book_type = cmd.split('-')[1] if len(cmd.split('-')) > 1 else 'general'
+            if book_type not in grouped_commands:
+                grouped_commands[book_type] = []
+            grouped_commands[book_type].append((cmd, params))
+
+        result = []
+
+        # If a specific block is requested
+        if block and block in grouped_commands:
+            result.append(f"\n{Fore.BLUE}📗 {block.capitalize()} commands:{Style.RESET_ALL}")
+            for cmd, params in grouped_commands[block]:
+                params_str = f" {' '.join(f'{Fore.YELLOW}{k}{Style.RESET_ALL}={Fore.CYAN}{v}{Style.RESET_ALL}' for k, v in params.items())}" if params else ""
+                result.append(f"{Fore.GREEN} ✓ {cmd}{params_str}")
+        # If no block specified or invalid block, print all commands
+        elif block is None:
+            result.append(f"{Fore.MAGENTA}🔍 All supported commands:{Style.RESET_ALL}")
+            for book_type, commands in grouped_commands.items():
+                result.append(f"\n{Fore.BLUE}📗 {book_type.capitalize()} commands:{Style.RESET_ALL}")
+                for cmd, params in commands:
+                    params_str = f" {' '.join(f'{Fore.YELLOW}{k}{Style.RESET_ALL}={Fore.CYAN}{v}{Style.RESET_ALL}' for k, v in params.items())}" if params else ""
+                    result.append(f"{Fore.GREEN} ✓ {cmd}{params_str}")
+        else:
+            result.append(f"{Fore.RED}❌ Block '{block}' not found. Available blocks:{Style.RESET_ALL}")
+            result.append(f"{Fore.CYAN}{', '.join(grouped_commands.keys())}{Style.RESET_ALL}")
+
+        return result
+
+    def get_record_fields(self, book_name: str) -> List[str]:
+        """Get all available field names for a given book's records"""
+        if book_name not in self.books:
+            raise ValueError(f"No such book: {book_name}")
+
+        book = self.books[book_name]
+        return book.get_record_class_fields() + book.get_record_multi_value_fields()
+
+    def global_search(self, query: str) -> List[Record]:
+        """Search across all books for records matching the query"""
+        # Validate minimum search length
+        min_length = FastSearchAdapter.MIN_SEARCH_LENGTH
+        if len(query.strip()) < min_length:
+            raise ValueError(f"Search query must be at least {min_length} characters long")
+
+        all_results = []
+
+        # Search in each book
+        for book_name, book in self.books.items():
+            try:
+                # Get results from this book
+                book_results = book.search_records(query)
+
+                # Add book origin information to each record
+                for record in book_results:
+                    # Add book type to record if possible
+                    if hasattr(record, 'fields'):
+                        record.fields['_book_type'] = book_name
+
+                # Add to combined results
+                all_results.extend(book_results)
+            except ValueError:
+                # Skip books that raise validation errors
+                continue
+
+        return all_results

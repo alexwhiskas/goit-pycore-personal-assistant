@@ -1,0 +1,26 @@
+[project]
+name = "goit-pycore-personal-assistant"
+version = "0.1.0"
+description = "Personal Assistant with contact management and fast search capabilities"
+readme = "README.md"
+requires-python = ">=3.7"
+license = {text = "MIT"}
+dependencies = [
+    "colorama>=0.4.4",
+]
+
+[project.scripts]
+personal-assistant = "main:main"
+
+[tool.setuptools]
+packages = ["src"]
+
+[tool.black]
+line-length = 100
+target-version = ["py37", "py38", "py39", "py310"]
+
+[tool.isort]
+profile = "black"
+line_length = 100
+multi_line_output = 3
+
