@@ -2,6 +2,35 @@ from functools import wraps
 from typing import Callable, Dict, Any
 
 
+def _validate_document_against_mapping(document: Dict[str, Any], mapping: Dict[str, Any]):
+    """Validate document against index mapping"""
+
+    def validate_field(obj, path=""):
+        if isinstance(obj, dict):
+            for key, value in obj.items():
+                current_path = f"{path}.{key}" if path else key
+                field_mapping = mapping.get(current_path, {})
+                field_type = field_mapping.get("type", "text")
+
+                if field_type == "integer" and value is not None:
+                    try:
+                        int(value)
+                    except (ValueError, TypeError):
+                        raise ValueError(f"Field '{current_path}' must be an integer")
+                elif field_type == "float" and value is not None:
+                    try:
+                        float(value)
+                    except (ValueError, TypeError):
+                        raise ValueError(f"Field '{current_path}' must be a float")
+                elif field_type == "boolean" and value is not None:
+                    if not isinstance(value, bool):
+                        raise ValueError(f"Field '{current_path}' must be a boolean")
+
+                if isinstance(value, (dict, list)):
+                    validate_field(value, current_path)
+
+    validate_field(document)
+
 def validate_index_exists(func: Callable) -> Callable:
     """Decorator to validate that index exists"""
 
@@ -95,7 +124,7 @@ def validate_document(func: Callable) -> Callable:
 
         # Validate against mapping if it exists
         if index_name in self.mappings:
-            self._validate_document_against_mapping(document, self.mappings[index_name])
+            _validate_document_against_mapping(document, self.mappings[index_name])
 
         return func(self, index_name, doc_id, document, *args, **kwargs)
 

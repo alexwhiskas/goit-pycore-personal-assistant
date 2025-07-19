@@ -1,13 +1,14 @@
 # src/core/book.py
 
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import Any, List
 from importlib import util
 import inspect
 import pickle
 from pathlib import Path
 
 from src.core.record import Record
+from src.core.fast_search_adapter import FastSearchAdapter
 
 
 class Book(ABC):
@@ -72,6 +73,7 @@ class Book(ABC):
 
     def __init__ (self):
         self.records = []
+        self.fast_search = FastSearchAdapter.get_instance()
 
     @abstractmethod
     def get_book_name (self) -> str:
@@ -82,6 +84,16 @@ class Book(ABC):
         record_class = self.get_record_class()
         record_object = record_class(**kwargs)
         self.records.append(record_object)
+
+        # Generate a unique ID if none exists
+        if 'id' not in record_object.fields:
+            record_object.fields['id'] = str(id(record_object))
+
+        # Index the record for fast search
+        try:
+            self.fast_search.index_record(self.get_book_name(), record_object)
+        except Exception as e:
+            print(f"Warning: Error indexing record: {e}")
 
         return [record_object]
 
@@ -100,15 +112,20 @@ class Book(ABC):
                 conditions[arg_key.replace(Book.get_search_prefix() + '_', '')] = arg_value
                 continue
 
-        # looks for matching records and deletes them
-        records_to_delete = [record for record in self.records if self._matches_conditions(record, conditions)]
+        # Use fast search if conditions are provided
+        if conditions:
+            # Find matching records first with fast search
+            matching_records = self.get_records(**kwargs)
 
-        # todo: add here prompt, list found records and ask to submit delete operation
-        for record_to_delete in records_to_delete:
-            self.records.remove(record_to_delete)
+            # Then delete them from both records list and search index
+            for record in matching_records:
+                record_id = record.fields.get("id") or id(record)
+                self.fast_search.delete_record(self.get_book_name(), str(record_id))
+                self.records.remove(record)
 
-        # returns amount of deleted records
-        return records_to_delete
+            return matching_records
+
+        return []
 
     def get_records (self, **kwargs) -> list:
         """
@@ -127,10 +144,33 @@ class Book(ABC):
                 conditions[arg_key.replace(Book.get_multi_value_to_search_prefix() + '_', '')] = arg_value
                 continue
 
-        # returns a list of all records that match the conditions
-        found_records = [record for record in self.records if self._matches_conditions(record, conditions)]
+        # If we have conditions, use fast search
+        if conditions:
+            # Convert conditions to a search filter
+            filters = {key: value for key, value in conditions.items()}
 
-        return found_records
+            # Use fast search to find matching records
+            result_dicts = self.fast_search.search_records(
+                self.get_book_name(),
+                None,  # No query string
+                filters
+            )
+
+            # Map results back to actual record objects
+            found_records = []
+            for result in result_dicts:
+                record_id = result.get("id")
+                # Find the actual record object
+                for record in self.records:
+                    rec_id = record.fields.get("id") or id(record)
+                    if str(rec_id) == str(record_id):
+                        found_records.append(record)
+                        break
+
+            return found_records
+        else:
+            # If no conditions, return all records
+            return self.records.copy()
 
     def update_records (self, **kwargs) -> list:
         """
@@ -167,13 +207,19 @@ class Book(ABC):
             elif arg_key in multi_values_fields:
                 multi_field_values_to_update.setdefault(arg_key, {})[''] = arg_value
 
-        # returns a list of all records that match the conditions
+        # Find records to update using fast search
         updated_records = []
-        for record in self.records:
-            if self._matches_conditions(record, conditions):
+        if conditions:
+            # Find matching records first
+            matching_records = self.get_records(**{f"{Book.get_search_prefix()}_{k}": v for k, v in conditions.items()})
+
+            # Then update them
+            for record in matching_records:
+                # Update regular fields
                 for field, value in fields_to_update.items():
                     record.fields[field] = value
 
+                # Update multi-value fields
                 for multi_value_field_name, multi_field_values in multi_field_values_to_update.items():
                     for multi_value_field_value_to_replace, new_multi_value_field_value in multi_field_values.items():
                         if multi_value_field_value_to_replace == '':
@@ -182,13 +228,69 @@ class Book(ABC):
                         record.multi_value_fields.setdefault(multi_value_field_name, {}).pop(multi_value_field_value_to_replace, None)
                         record.multi_value_fields[multi_value_field_name][new_multi_value_field_value] = new_multi_value_field_value
 
+                # Delete multi-value field entries
                 for multi_value_field_name_to_delete, multi_field_values_to_delete in multi_field_values_to_delete.items():
                     for multi_value_field_value_to_delete in multi_field_values_to_delete:
                         record.multi_value_fields.setdefault(multi_value_field_name_to_delete, {}).pop(multi_value_field_value_to_delete, None)
 
+                # Re-index the updated record
+                self.fast_search.update_record(self.get_book_name(), record)
                 updated_records.append(record)
 
         return updated_records
+
+    def search_records(self, query: str) -> List[Record]:
+        """Search records using full-text search"""
+        if not query.strip():
+            return []
+
+        # Validate minimum search length
+        min_length = FastSearchAdapter.MIN_SEARCH_LENGTH
+        if len(query.strip()) < min_length:
+            raise ValueError(f"Search query must be at least {min_length} characters long")
+
+        # Use fast search with query
+        try:
+            result_dicts = self.fast_search.search_records(
+                self.get_book_name(),
+                query,
+                None,  # No filters
+                100    # Limit to 100 results
+            )
+
+            # Map results back to actual record objects
+            found_records = []
+            for result in result_dicts:
+                record_id = result.get("id")
+                # Find the actual record object
+                record_found = False
+                for record in self.records:
+                    rec_id = record.fields.get("id") or id(record)
+                    if str(rec_id) == str(record_id):
+                        found_records.append(record)
+                        record_found = True
+                        break
+
+                # If we couldn't find the record, it might be because of ID mismatches
+                if not record_found:
+                    # Try matching on key fields
+                    for record in self.records:
+                        # Compare critical fields
+                        matches = True
+                        for key, value in result.items():
+                            if key in record.fields and str(record.fields[key]) != str(value):
+                                matches = False
+                                break
+                        if matches:
+                            found_records.append(record)
+                            # Update the ID for future searches
+                            record.fields['id'] = record_id
+                            break
+
+            return found_records
+        except ValueError as e:
+            # Re-raise with the same message
+            raise ValueError(str(e))
 
     # todo: point of extension for autocomplete search by conditions
     def _matches_conditions (self, record, conditions: dict) -> bool:

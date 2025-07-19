@@ -33,7 +33,7 @@ class Record(ABC):
         unsupported_fields = [key for key in kwargs if key not in valid_fields]
 
         if unsupported_fields:
-            raise ValueError(f'Unsupported field(s): {', '.join(unsupported_fields)}')
+            raise ValueError(f"Unsupported field(s): {', '.join(unsupported_fields)}")
 
         required_fields = self.get_record_required_fields()
         missing_required_fields = [
@@ -41,7 +41,7 @@ class Record(ABC):
             if field not in kwargs or not kwargs[field]
         ]
         if missing_required_fields:
-            raise ValueError(f'Missing required field(s): {', '.join(missing_required_fields)}')
+            raise ValueError(f"Missing required field(s): {', '.join(missing_required_fields)}")
 
         # initializing multi value fields
         for multi_value_field in self.get_record_multi_value_fields():
