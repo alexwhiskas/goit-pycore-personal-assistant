@@ -97,11 +97,24 @@ class CommandAutoCompletion:
         args_dict = {}
         requested_operation_args = self.extracted_from_groups_command_params[command]
 
+        # Special handling for commands without hyphens
+        if "-" not in command:
+            # For simple commands like "help", just prompt for each argument
+            for arg_name, arg_desc in requested_operation_args.items():
+                prompt = f"Enter {arg_name} ({arg_desc}) [optional, press Enter to skip]: "
+                value = input(prompt).strip()
+                if value:
+                    args_dict[arg_name] = value
+            return args_dict
+
+        # Regular book-specific command handling
         book_name = command.split("-")[1]
 
         current_book_record_class = None
         required_record_fields = {}
         required_record_fields_to_validate = {}
+
+        # Process book-specific logic
         for supported_book_name, supported_book_record_class in self.books_records_classes.items():
             plural_supported_book_name = supported_book_name + "s"
             if book_name in [supported_book_name, plural_supported_book_name]:

@@ -9,8 +9,6 @@ from pathlib import Path
 from typing import Dict
 from colorama import Fore, Style
 
-import questionary
-
 from src.core.book import Book, RETURN_RESULT_NEW, RETURN_RESULT_FOUND, RETURN_RESULT_DUPLICATE, RETURN_RESULT_DELETED, RETURN_RESULT_NOT_DELETED, RETURN_RESULT_UPDATED, RETURN_RESULT_NOT_UPDATED
 from src.core.response_code import PREV_OPERATION, RETRY_OPERATION, EXIT_OPERATION
 from src.core.command_auto_complete.command_auto_complete import CommandAutoCompletion
@@ -425,14 +423,15 @@ class BookManager:
     def run_command(self, command_name: str, **kwargs):
         # Handle global help command
         if command_name == "help":
-            group = kwargs.get("group")
+            group = kwargs.get("group", "")
             if group and group in self.supported_operations_per_book:
                 print(f"\n{Fore.BLUE}📚 Help for {group.capitalize()} commands:{Style.RESET_ALL}")
                 self._print_supported_grouped_commands({group: self.supported_operations_per_book[group]})
+                return None
             else:
                 print(f"\n{Fore.BLUE}📚 All available commands:{Style.RESET_ALL}")
                 self._print_supported_grouped_commands(self.supported_operations_per_book)
-            return []
+                return None
 
         # Handle global search command
         if command_name == "search-all":
