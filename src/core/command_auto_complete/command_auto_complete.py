@@ -131,8 +131,6 @@ class CommandAutoCompletion:
             requested_operation_arg_label_prompt = f'Enter {'required' if request_operation_arg_name in required_record_fields else 'optional'} value for {requested_operation_arg_label}: '
             user_input = input(requested_operation_arg_label_prompt).strip()
 
-            # todo: add validation here based on field name and Record validate_* methods
-
             def check_input_for_required_field (required_field_input_value: str = ''):
                 if not required_field_input_value and request_operation_arg_name in required_record_fields:
                     required_field_input_value = input(
@@ -149,9 +147,9 @@ class CommandAutoCompletion:
                         ).strip()
 
                         if prev_operation_or_define_required_field_value_answer == define_value_again_option:
-                            required_field_input_value = check_input_for_required_field(required_field_input_value)
+                            return check_input_for_required_field('')
                         else:
-                            if prev_operation_or_define_required_field_value_answer != prev_operation_option:
+                            if prev_operation_or_define_required_field_value_answer == prev_operation_option:
                                 print("Sorry, you didn't entered required field value, you will be redirected to previous step.")
 
                             return PREV_OPERATION
@@ -159,8 +157,8 @@ class CommandAutoCompletion:
                     if required_field_input_value == '':
                         required_field_input_value = propose_new_arg_value_or_go_to_prev_step()
 
-                        if required_field_input_value == PREV_OPERATION:
-                            return PREV_OPERATION
+                    if required_field_input_value == PREV_OPERATION:
+                        return PREV_OPERATION
 
                 if current_book_record_class is not None and request_operation_arg_name in required_record_fields_to_validate:
                     validation_func = getattr(current_book_record_class, "validate_" + request_operation_arg_name)
@@ -179,7 +177,7 @@ class CommandAutoCompletion:
                             ).strip()
 
                             if prev_operation_or_define_required_field_value_answer == define_value_again_option:
-                                required_field_input_value = check_input_for_required_field(required_field_input_value)
+                                return check_input_for_required_field(required_field_input_value)
                             else:
                                 if prev_operation_or_define_required_field_value_answer != prev_operation_option:
                                     print(

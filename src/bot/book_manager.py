@@ -106,6 +106,11 @@ class BookManager:
                         print(f"{Fore.RED}⚠️ No command entered. Please try again.{Style.RESET_ALL}")
                         return RETRY_OPERATION
 
+                    if isinstance(prompted_args, str) and prompted_args == PREV_OPERATION:
+                        return try_run_operation_from_customer_input()
+                    elif isinstance(prompted_args, str) and prompted_args == EXIT_OPERATION:
+                        return EXIT_OPERATION
+
                     command_execution_result = self.run_command(user_input, **prompted_args)
 
                     if isinstance(command_execution_result, tuple) and len(command_execution_result) == 3:
@@ -283,7 +288,6 @@ class BookManager:
                 if result == EXIT_OPERATION:
                     break
         finally:
-            self.save_books_state()
             print(f"\n{Fore.GREEN}✅ Address book saved.{Style.RESET_ALL}")
             print(f"{Fore.YELLOW}👋 Goodbye!{Style.RESET_ALL}")
 
