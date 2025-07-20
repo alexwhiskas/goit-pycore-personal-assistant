@@ -161,11 +161,11 @@ class CommandAutoCompletion:
                         return PREV_OPERATION
 
                 if current_book_record_class is not None and request_operation_arg_name in required_record_fields_to_validate:
-                    validation_func = getattr(current_book_record_class, "validate_" + request_operation_arg_name)
+                    validation_func = getattr(current_book_record_class, "validate_" + request_operation_arg_name, None)
 
                     if callable(validation_func):
                         try:
-                            validation_func(value)
+                            validation_func(required_field_input_value)
                         except ValueError as val_err:
                             print(f"Validation failed for {request_operation_arg_name}. " + str(val_err))
 

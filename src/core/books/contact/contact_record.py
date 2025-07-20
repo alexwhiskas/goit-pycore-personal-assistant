@@ -35,7 +35,9 @@ class ContactRecord(Record):
         return ['email', 'birthday', 'phone_number']
 
     # ---------- Validation Helpers ----------
-    def validate_email (self, email):
+    @classmethod
+    @hidden_method
+    def validate_email (cls, email):
         email = email.strip()
         pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
 
@@ -44,14 +46,18 @@ class ContactRecord(Record):
         else:
             raise ValueError('Please use correct email format: email@domain.com')
 
-    def validate_birthday (self, birthday):
+    @classmethod
+    @hidden_method
+    def validate_birthday (cls, birthday):
         try:
             parsed_date = datetime.strptime(birthday.strip(), '%Y-%m-%d')
             return parsed_date.date()  # returning parsed date
         except ValueError:
             raise ValueError('Please use correct date format: %Y-%m-%d')
 
-    def validate_phone_number (self, phone_number):
+    @classmethod
+    @hidden_method
+    def validate_phone_number (cls, phone_number):
         clean_from_space = phone_number.strip()
         clean_from_symbol = re.sub(r'\D', '', clean_from_space)  # leaving only digits
         clean_numbers = None
