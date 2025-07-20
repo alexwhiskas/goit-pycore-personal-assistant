@@ -211,7 +211,7 @@ class BookManager:
 
                                     # todo: complete emulation of update_record command execution
                                     if result_code == RETURN_RESULT_NOT_UPDATED:
-                                        if selection_from_founded_records == selection_from_founded_records:
+                                        if selection_from_founded_records == return_to_prev_step_option:
                                             return PREV_OPERATION
 
                                         found_record_to_update = current_operation_book.data[selection_from_founded_records]
