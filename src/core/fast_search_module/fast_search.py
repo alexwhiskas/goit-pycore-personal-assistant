@@ -1,3 +1,6 @@
+# src/core/fast_search_module/fast_search.py
+
+
 import json
 import re
 import pickle
@@ -6,39 +9,8 @@ from typing import Dict, List, Any, Set, Optional
 from datetime import datetime
 import math
 
-
 from src.core.fast_search_module.decorators import handle_exceptions, validate_document, auto_save, validate_index_exists, cache_result
 from src.core.fast_search_module.index_data import IndexData
-
-
-def _validate_document_against_mapping(document: Dict[str, Any], mapping: Dict[str, Any]):
-    """Validate document against index mapping"""
-
-    def validate_field(obj, path=""):
-        if isinstance(obj, dict):
-            for key, value in obj.items():
-                current_path = f"{path}.{key}" if path else key
-                field_mapping = mapping.get(current_path, {})
-                field_type = field_mapping.get("type", "text")
-
-                if field_type == "integer" and value is not None:
-                    try:
-                        int(value)
-                    except (ValueError, TypeError):
-                        raise ValueError(f"Field '{current_path}' must be an integer")
-                elif field_type == "float" and value is not None:
-                    try:
-                        float(value)
-                    except (ValueError, TypeError):
-                        raise ValueError(f"Field '{current_path}' must be a float")
-                elif field_type == "boolean" and value is not None:
-                    if not isinstance(value, bool):
-                        raise ValueError(f"Field '{current_path}' must be a boolean")
-
-                if isinstance(value, (dict, list)):
-                    validate_field(value, current_path)
-
-    validate_field(document)
 
 
 def _tokenize(text: str) -> List[str]:
@@ -178,19 +150,19 @@ class FastSearchModule:
 
                     if field_type in ["text", "keyword"]:
                         if isinstance(value, (str, int, float, bool)):
-                            all_tokens.update(self._tokenize(str(value)))
+                            all_tokens.update(_tokenize(str(value)))
                         elif isinstance(value, (list, dict)):
                             extract_text(value, current_path)
                     elif field_type in ["integer", "float"]:
                         # Numbers can be searched as text too
-                        all_tokens.update(self._tokenize(str(value)))
+                        all_tokens.update(_tokenize(str(value)))
                     elif isinstance(value, (dict, list)):
                         extract_text(value, current_path)
             elif isinstance(obj, list):
                 for item in obj:
                     extract_text(item, path)
             else:
-                all_tokens.update(self._tokenize(str(obj)))
+                all_tokens.update(_tokenize(str(obj)))
 
         extract_text(doc)
         return all_tokens
@@ -216,7 +188,7 @@ class FastSearchModule:
 
         def extract_all_tokens(obj):
             if isinstance(obj, str):
-                return self._tokenize(obj)
+                return _tokenize(obj)
             elif isinstance(obj, dict):
                 tokens_dict = []
                 for value in obj.values():
@@ -228,7 +200,7 @@ class FastSearchModule:
                     tokens_list.extend(extract_all_tokens(item))
                 return tokens_list
             else:
-                return self._tokenize(str(obj))
+                return _tokenize(str(obj))
 
         all_tokens = extract_all_tokens(normalized_doc)
 
@@ -257,7 +229,7 @@ class FastSearchModule:
                     if isinstance(value, (dict, list)):
                         result[key] = normalize_field(value, current_path)
                     else:
-                        result[key] = self._normalize_value(value, field_type)
+                        result[key] = _normalize_value(value, field_type)
                 return result
             elif isinstance(obj, list):
                 return [normalize_field(item, path) for item in obj]
@@ -271,7 +243,7 @@ class FastSearchModule:
     def search(self, index_name: str, query: str, filters: Optional[Dict[str, Any]] = None, limit: int = 10) -> List[Dict[str, Any]]:
         """Search for documents in the specified index"""
         index_data = self.indices[index_name]
-        query_tokens = self._tokenize(query)
+        query_tokens = _tokenize(query)
 
         if not query_tokens or not index_data or not index_data.inverted_index:
             return []
@@ -286,7 +258,7 @@ class FastSearchModule:
         for doc_id in candidate_docs:
             score = 0.0
             for token in query_tokens:
-                score += self._calculate_tf_idf(token, doc_id, index_data)
+                score += _calculate_tf_idf(token, doc_id, index_data)
 
             if score > 0:
                 scored_docs.append({

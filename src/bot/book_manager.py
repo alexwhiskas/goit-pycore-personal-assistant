@@ -7,137 +7,128 @@ import time
 from collections import defaultdict
 from pathlib import Path
 from typing import Dict
+from colorama import Fore, Style
 
 import questionary
 
-from src.core.book import Book
+from src.core.book import Book, RETURN_RESULT_NEW, RETURN_RESULT_FOUND, RETURN_RESULT_DUPLICATE, RETURN_RESULT_DELETED, RETURN_RESULT_NOT_DELETED, RETURN_RESULT_UPDATED, RETURN_RESULT_NOT_UPDATED
+from src.core.response_code import PREV_OPERATION, RETRY_OPERATION, EXIT_OPERATION
+from src.core.command_auto_complete.command_auto_complete import CommandAutoCompletion
+from src.core.fast_search_adapter import FastSearchAdapter
 
 
 class BookManager:
-    EXIT_OPERATION = 'exit'
-    PREV_OPERATION = 'prev'
+    # EXIT_OPERATION = 'exit'
+    # PREV_OPERATION = 'prev'
+    # RETRY_OPERATION = 'retry'
 
     books: Dict[str, Book] = {}
 
     def __init__ (self):
         self.books = {}
         self.supported_operations_per_book = {}
+
+        # Get the fast search adapter instance
+        self.fast_search = FastSearchAdapter.get_instance()
         self._load_books()
         self._load_supported_operations_per_book()
+        # Initialize search indexes for all books
+        self._initialize_search_indexes()
+
+    def _initialize_search_indexes (self):
+        """Initialize search indexes for all books"""
+        print(f"{Fore.BLUE}🔍 Initializing search indexes...{Style.RESET_ALL}")
+        for book_name, book in self.books.items():
+            fields = book.get_record_class().get_record_fields()
+            multi_value_fields = book.get_record_class().get_record_multi_value_fields()
+
+            # Initialize the index for this book type
+            self.fast_search.initialize_book_index(book_name, fields, multi_value_fields)
+
+            # Index all existing records
+            for record in book.data.values():
+                self.fast_search.index_record(book_name, record)
+
+        print(f"{Fore.GREEN}✅ Search indexes initialized{Style.RESET_ALL}")
 
     def end (self):
+        print(f"\n{Fore.YELLOW}👋 Goodbye!{Style.RESET_ALL}")
         self.animate_process_func('Saving books info. Finishing process')
         self.save_books_state()
         exit()
 
+    def _print_supported_grouped_commands (self, grouped_commands):
+        # Print commands by group - show global commands first
+        if 'global' in grouped_commands:
+            print(f"\n{Fore.BLUE}🌐 Global commands:{Style.RESET_ALL}")
+            for cmd, params in grouped_commands['global'].items():
+                params_str = f" {' '.join(f'{Fore.YELLOW}{k}{Style.RESET_ALL}={Fore.CYAN}{v}{Style.RESET_ALL}' for k, v in params.items())}" if params else ""
+                print(f"{Fore.GREEN} ✓ {cmd}{params_str}")
+
+        if 'general' in grouped_commands:
+            print(f"\n{Fore.BLUE}📋 General commands:{Style.RESET_ALL}")
+            for cmd, params in grouped_commands['general'].items():
+                params_str = f" {' '.join(f'{Fore.YELLOW}{k}{Style.RESET_ALL}={Fore.CYAN}{v}{Style.RESET_ALL}' for k, v in params.items())}" if params else ""
+                print(f"{Fore.GREEN} ✓ {cmd}{params_str}")
+
+        # Then show book-specific commands
+        for book_type, commands in grouped_commands.items():
+            if book_type not in ['global', 'general']:
+                print(f"\n{Fore.BLUE}📗 {book_type.capitalize()} commands:{Style.RESET_ALL}")
+                for cmd, params in commands.items():
+                    params_str = f" {' '.join(f'{Fore.YELLOW}{k}{Style.RESET_ALL}={Fore.CYAN}{v}{Style.RESET_ALL}' for k, v in params.items())}" if params else ""
+                    print(f"{Fore.GREEN} ✓ {cmd}{params_str}")
+
+        print(f"\n{Fore.CYAN}{'=' * 50}{Style.RESET_ALL}")
+        print(f"{Fore.YELLOW}ℹ️ Press Ctrl+C to exit at any time{Style.RESET_ALL}")
+        print(f"{Fore.CYAN}{'=' * 50}{Style.RESET_ALL}\n")
+
     def start (self, book_selection_prompt):
-        supported_books = list(self.supported_operations_per_book.keys())
+        grouped_commands = self.supported_operations_per_book
+        grouped_commands['global'] = {'search-all': {'query': 'query'}}
+        grouped_commands['global']['help'] = {'group': ', '.join(grouped_commands.keys())}
+        grouped_commands['global']['exit'] = {}
 
-        while True:
-            customer_input = questionary.select(
-                book_selection_prompt,
-                choices=supported_books + [self.EXIT_OPERATION],
-            ).ask()
+        self._print_supported_grouped_commands(grouped_commands)
+        books_records_classes = {}
+        for book_name, book in self.books.items():
+            books_records_classes[book_name] = book.get_record_class()
 
-            if customer_input == self.EXIT_OPERATION:
-                self.end()
-                break
-            else:
-                result = self.continue_with_book_operations(customer_input)
+        completer = CommandAutoCompletion(list(grouped_commands.keys()), grouped_commands, books_records_classes)
 
-                if result:
-                    self.start('Please, select a book you would like to work with:')
-                elif result == self.PREV_OPERATION:
-                    continue
-                elif result == self.EXIT_OPERATION:
-                    self.end()
-
-    def continue_with_book_operations (self, book_name):
-        supported_operations = self.supported_operations_per_book[book_name]
-        supported_operations_keys = list(supported_operations.keys())
-        book_operation_selection_prompt = f'Please, select operation you would like to perform on your {book_name} book:'
-        process_management_commands = [self.EXIT_OPERATION, self.PREV_OPERATION]
-
-        book = self.books.get(book_name)
-        book_record = book.get_record_class()
-        required_record_fields = book_record.get_record_required_fields()
-
-        def run_operation_from_customer_input (user_operation_input: str = ''):
+        try:
             while True:
-                if user_operation_input == '':
-                    user_operation_input = questionary.select(
-                        book_operation_selection_prompt,
-                        choices=supported_operations_keys + process_management_commands,
-                    ).ask()
+                def try_run_operation_from_customer_input():
+                    cmd_and_args = completer.prompt_with_completion(f"{Fore.CYAN}💬 Enter a command: {Style.RESET_ALL}")
+                    user_input, prompted_args = cmd_and_args
 
-                if user_operation_input in supported_operations_keys:
-                    requested_operation_params = supported_operations[user_operation_input].copy()
-                    operation_params = {}
+                    if not user_input:
+                        print(f"{Fore.RED}⚠️ No command entered. Please try again.{Style.RESET_ALL}")
+                        return RETRY_OPERATION
 
-                    prompt_for_command_params = f'Please define requested params below, leave empty if not required and you don\'t want to use it: '
-                    print(prompt_for_command_params)
-
-                    while requested_operation_params:
-                        key, value = next(iter(requested_operation_params.items()))
-
-                        key_label = key.replace('_', ' ').capitalize()
-                        # todo: implement variation of list of required fields based on user operation input
-                        key_label_prompt = f'Enter {'required' if key in required_record_fields else 'optional'} value for {key_label}: '
-                        user_input = input(key_label_prompt).strip()
-                        # todo: add validation here based on field name and Record validate_* methods
-
-                        def check_input_for_required_field (required_field_input_value: str = ''):
-                            if not required_field_input_value and key in required_record_fields:
-                                required_field_input_value = input(
-                                    'This is a required field, you will be returned to previous step if you won\'t define value for ' + (
-                                            key_label[0].lower() + key_label[1:]) + ': '
-                                ).strip()
-
-                                if required_field_input_value == '':
-                                    prev_operation_option = 'go to previous step'
-                                    define_value_again_option = 'try to define value again'
-
-                                    # # used for testing purposes start
-                                    # # prev_operation_or_define_required_field_value_answer = prev_operation_option
-                                    # prev_operation_or_define_required_field_value_answer = define_value_again_option
-                                    # # used for testing purposes end
-
-                                    prev_operation_or_define_required_field_value_answer = questionary.select(
-                                        'Want to go to prev operation or try to define new value again?',
-                                        choices=[prev_operation_option, define_value_again_option],
-                                    ).ask()
-
-                                    if prev_operation_or_define_required_field_value_answer == define_value_again_option:
-                                        return check_input_for_required_field(required_field_input_value)
-                                    else:
-                                        return self.PREV_OPERATION
-
-                            return required_field_input_value
-
-                        field_input_value = check_input_for_required_field(user_input)
-
-                        if field_input_value == self.PREV_OPERATION:
-                            return field_input_value
-                        else:
-                            operation_params[key] = field_input_value
-                            del requested_operation_params[key]
-
-                    command_execution_result = self.run_command(user_operation_input, **operation_params)
+                    command_execution_result = self.run_command(user_input, **prompted_args)
 
                     if isinstance(command_execution_result, tuple) and len(command_execution_result) == 3:
                         result_code, result_records, conditions = command_execution_result
+                        book_name_from_operation = user_input.split("-")[1]
+                        current_operation_book = self.books.get(book_name_from_operation) or self.books.get(book_name_from_operation[:-1])
+                        print(f"Current operation book: {current_operation_book}")
 
                         if result_code in [
-                            book.RETURN_RESULT_NEW, book.RETURN_RESULT_UPDATED, book.RETURN_RESULT_DELETED,
-                            book.RETURN_RESULT_FOUND
+                            RETURN_RESULT_NEW,
+                            RETURN_RESULT_UPDATED,
+                            RETURN_RESULT_DELETED,
+                            RETURN_RESULT_FOUND
                         ]:
                             self.print_result_records(
-                                f'As result of your inputs, following record(s) was {result_code}',
+                                f'As result of your inputs, following record(s) was/were {result_code}',
                                 result_records
                             )
-                        elif result_code == book.RETURN_RESULT_DUPLICATE:
+
+                            return result_code
+                        elif result_code == RETURN_RESULT_DUPLICATE:
                             self.print_result_records(
-                                f'Your input created following conditions: {self._dict_to_string(conditions)}, and we found this record: ',
+                                f'Following entered params: {self._dict_to_string(conditions)}, will create collision with existing records: ',
                                 result_records
                             )
 
@@ -149,10 +140,9 @@ class BookManager:
                             # user_preferred_record_operation = choice_update
                             # # used for testing purposes end
 
-                            user_preferred_record_operation = questionary.select(
-                                'Do you want to update existing record or add a new one?',
-                                choices=[choice_add, choice_update],
-                            ).ask()
+                            user_preferred_record_operation = input(
+                                f"Do you want to update existing record or add a new one? ({choice_add}/{choice_update}), if nothing entered, moving to prev operation: "
+                            ).strip() # todo: check issue if nothing entered
 
                             if user_preferred_record_operation == choice_add:
                                 print(
@@ -160,69 +150,124 @@ class BookManager:
                                     + self._dict_to_string(conditions)
                                 )
 
-                                return run_operation_from_customer_input(user_operation_input)
+                                return try_run_operation_from_customer_input()
                             else:
-                                book.update_records(**operation_params)
-                        elif result_code == book.RETURN_RESULT_NOT_UPDATED:
+                                current_operation_book.update_records(**prompted_args) # todo: emulate update operation
+
+                                return RETURN_RESULT_UPDATED
+                        elif result_code in [RETURN_RESULT_NOT_UPDATED, RETURN_RESULT_NOT_DELETED]:
                             print(
-                                f'Couldn\'t find record to update with entered search params: ' + self._dict_to_string(
+                                f"Couldn't find record to update with entered search params: " + self._dict_to_string(
                                     conditions
                                 )
                             )
 
-                            choice_add = 'add new'
-                            suggest_existing = 'suggest existing'
+                            suggest_existing = "suggest existing"
+                            alternative_choice = ""
+                            if result_code == RETURN_RESULT_UPDATED:
+                                alternative_choice = "add new record"
 
-                            user_preferred_record_operation = questionary.select(
-                                f'Do you want me to {suggest_existing} record or help you to add a new one?',
-                                choices=[choice_add, suggest_existing],
-                            ).ask()
+                            if (alternative_choice):
+                                prompt_message = f"Do you want to update existing record or add a new one? ({alternative_choice}/{suggest_existing}), if nothing entered, moving to prev operation: "
+                            else:
+                                prompt_message = f"Do you want us to '{suggest_existing}' record? If nothing entered, moving to prev operation: "
 
-                            if user_preferred_record_operation == choice_add:
-                                book.add_record(**operation_params)
-                                return self.PREV_OPERATION
+                            user_preferred_record_operation = input(prompt_message).strip()  # todo: check issue if nothing entered
+
+                            if alternative_choice and user_preferred_record_operation == alternative_choice:
+                                current_operation_book.add_record(**prompted_args)
+
+                                return PREV_OPERATION
                             elif user_preferred_record_operation == suggest_existing:
-                                self.animate_process_func('Looking for records to suggest')
-                                # perform here fuzzy search
-                                return self.PREV_OPERATION
-                        elif result_code == book.RETURN_RESULT_NOT_DELETED:
-                            print(
-                                f'Couldn\'t find record to delete with entered search params: ' + self._dict_to_string(
-                                    conditions
-                                )
-                            )
+                                # self.animate_process_func('Looking for records to suggest')
+                                # found_records_result_code, found_records, conditions_to_find_by = current_operation_book.search_records(' '.join(list(conditions.values())))
+                                found_records_result_code, found_records, conditions_to_find_by = current_operation_book.search_records(conditions)
 
-                            go_back = 'go back'
-                            suggest_existing = 'suggest existing'
+                                if found_records:
+                                    records_options = {}
+                                    for found_record in found_records:
+                                        records_options[found_record.record_as_option()] = found_record
 
-                            user_preferred_record_operation = questionary.select(
-                                f'Do you want me to {suggest_existing} record or {go_back} to previous step?',
-                                choices=[go_back, suggest_existing],
-                            ).ask()
+                                    return_to_prev_step_option = "---Return to previous step"
+                                    print(f"Records options: {list(records_options.keys())}")
+                                    # return PREV_OPERATION # todo: remove after test
 
-                            if user_preferred_record_operation == go_back:
-                                return self.PREV_OPERATION
-                            elif user_preferred_record_operation == suggest_existing:
-                                self.animate_process_func('Looking for records to suggest')
-                                # perform here fuzzy search
-                                return self.PREV_OPERATION
+                                    selection_from_founded_records = '' # todo: remove after test
+                                    # selection_from_founded_records = questionary.select(
+                                    #     'Choose from one of the following records to process:',
+                                    #     list(records_options.keys()) + [return_to_prev_step_option],
+                                    # ).ask()
+
+                                    # todo: complete emulation of update_record command execution
+                                    if result_code == RETURN_RESULT_NOT_UPDATED:
+                                        found_record_to_update = current_operation_book.data[selection_from_founded_records]
+                                        prompted_args = {}
+
+                                        def build_record_to_update_dict_from_objects(new_record_data, found_record_to_update):
+                                            found_record_fields = found_record_to_update.get_record_fields()
+                                            found_record_fields_values = found_record_to_update.fields
+
+                                            for found_record_field in found_record_fields:
+                                                if not new_record_data.get(found_record_field):
+                                                    continue
+
+                                                if not found_record_to_update.get(found_record_field):
+                                                    prompted_args.update(
+                                                        {
+                                                            Book.get_multi_value_to_update_prefix() + '_' + found_record_field: new_record_data[new_record_data]
+                                                        }
+                                                    )
+                                                prompted_args.update({Book.get_search_prefix() + '_' + found_record_field: found_record_fields_values[found_record_field]})
+
+                                                if found_record_field in new_record_data:
+                                                    prompted_args.update(
+                                                        {
+                                                            Book.get_multi_value_to_update_prefix() + '_' + found_record_field: new_record_data[new_record_data]
+                                                        }
+                                                    )
+
+                                            found_record_multi_value_fields = found_record_to_update.get_multi_value_fields()
+                                            found_record_multi_value_fields_values = found_record_to_update.multi_value_fields
+
+                                            for found_record_multi_value_field in found_record_multi_value_fields:
+                                                if not found_record_multi_value_fields_values.get(found_record_multi_value_field):
+                                                    continue
+                                                prompted_args.update({Book.get_search_prefix() + '_' + found_record_multi_value_field: found_record_multi_value_fields_values[found_record_multi_value_field]})
+
+                                                if found_record_field in new_record_data:
+                                                    prompted_args.update(
+                                                        {
+                                                            Book.get_multi_value_to_update_prefix() + '_' + found_record_field: new_record_data[new_record_data]
+                                                        }
+                                                    )
+
+                                        prepared_prompt_args = build_record_to_update_dict_from_objects()
+                                        update_result_code = current_operation_book.update_records(**prompted_args)
+                                    else:
+                                        if selection_from_founded_records in records_options:
+                                            del current_operation_book.data[selection_from_founded_records]
+                                else:
+                                    print(f"Returning to previous step, we couldn't find any records for your keywords: " + self._dict_to_string(conditions))
+
+                            return PREV_OPERATION
 
                     elif isinstance(command_execution_result, list):
                         self.print_result_records(
                             print(
-                                f"Function '{user_operation_input} returned {len(command_execution_result)} record(s):"
+                                f"Function '{user_input} returned {len(command_execution_result)} record(s):"
                             ),
                             command_execution_result
                         )
-                        command_execution_result = self.PREV_OPERATION
-                elif user_operation_input in process_management_commands:
-                    command_execution_result = user_operation_input
-                else:
-                    command_execution_result = self.PREV_OPERATION
 
-                return command_execution_result
+                        return PREV_OPERATION
+                    else:
+                        return RETRY_OPERATION
 
-        return run_operation_from_customer_input()
+                try_run_operation_from_customer_input()
+        finally:
+            self.save_books_state()
+            print(f"\n{Fore.GREEN}✅ Address book saved.{Style.RESET_ALL}")
+            print(f"{Fore.YELLOW}👋 Goodbye!{Style.RESET_ALL}")
 
     def animate_process_func (self, animation_command):
         print(f'\n{animation_command}...')
@@ -469,5 +514,5 @@ class BookManager:
             print(record)
             print("-" * 30)
 
-    def _dict_to_string (data: dict, separator: str = ", ") -> str:
+    def _dict_to_string (self, data: dict, separator: str = ", ") -> str:
         return separator.join(f'{k}= {v}' for k, v in data.items())

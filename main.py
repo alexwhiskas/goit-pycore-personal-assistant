@@ -3,13 +3,14 @@
 
 import signal
 import sys
-import shlex
-
 from functools import wraps
 
+from colorama import init
+
 from src.bot.book_manager import BookManager
-from src.core.record import Record
-from src.core.command_auto_complete.command_auto_complete import CommandAutoCompletion
+
+# Initialize colorama
+init(autoreset=True)
 
 book_manager = BookManager()
 
@@ -40,6 +41,7 @@ def main ():
     finally:
         book_manager.save_books_state()
         print("\nAddress book saved.")
+
 
 if __name__ == "__main__":
     main()

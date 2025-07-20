@@ -24,6 +24,16 @@ class ContactRecord(Record):
     def get_record_required_fields (cls) -> list[str]:
         return ['firstname', 'lastname']
 
+    @classmethod
+    @hidden_method
+    def get_record_fields (cls) -> list[str]:
+        return ['firstname', 'lastname']
+
+    @classmethod
+    @hidden_method
+    def get_record_fields_to_validate (cls) -> list[str]:
+        return ['email', 'birthday', 'phone_number']
+
     # ---------- Validation Helpers ----------
     def validate_email (self, email):
         email = email.strip()
@@ -55,6 +65,6 @@ class ContactRecord(Record):
 
         # supported phone number format is: 380XXYYYYYYY — so, checking if it consists of 12 digits
         if clean_numbers is None or len(clean_numbers) != 12:
-            raise ValueError('Please use correct date format: %Y-%m-%d')
+            raise ValueError("Please use phone number which has 12 digits in total and start with '38'")
 
         return clean_numbers # returning phone number with only digits for easier search operations

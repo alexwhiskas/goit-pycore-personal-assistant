@@ -25,3 +25,8 @@ class NoteRecord(Record):
     @hidden_method
     def get_duplicate_check_fields (cls) -> list[str]:
         return ['title']
+
+    @classmethod
+    @hidden_method
+    def get_record_fields_to_validate (cls) -> list[str]:
+        return []

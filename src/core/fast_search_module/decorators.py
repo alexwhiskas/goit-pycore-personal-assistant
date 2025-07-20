@@ -1,12 +1,45 @@
+# src/core/fast_search_module/decorators.py
+
+
 from functools import wraps
 from typing import Callable, Dict, Any
 
 
-def validate_index_exists(func: Callable) -> Callable:
+def _validate_document_against_mapping (document: Dict[str, Any], mapping: Dict[str, Any]):
+    """Validate document against index mapping"""
+
+    def validate_field (obj, path=""):
+        if isinstance(obj, dict):
+            for key, value in obj.items():
+                current_path = f"{path}.{key}" if path else key
+                field_mapping = mapping.get(current_path, {})
+                field_type = field_mapping.get("type", "text")
+
+                if field_type == "integer" and value is not None:
+                    try:
+                        int(value)
+                    except (ValueError, TypeError):
+                        raise ValueError(f"Field '{current_path}' must be an integer")
+                elif field_type == "float" and value is not None:
+                    try:
+                        float(value)
+                    except (ValueError, TypeError):
+                        raise ValueError(f"Field '{current_path}' must be a float")
+                elif field_type == "boolean" and value is not None:
+                    if not isinstance(value, bool):
+                        raise ValueError(f"Field '{current_path}' must be a boolean")
+
+                if isinstance(value, (dict, list)):
+                    validate_field(value, current_path)
+
+    validate_field(document)
+
+
+def validate_index_exists (func: Callable) -> Callable:
     """Decorator to validate that index exists"""
 
     @wraps(func)
-    def wrapper(self, index_name: str, *args, **kwargs):
+    def wrapper (self, index_name: str, *args, **kwargs):
         if index_name not in self.indices:
             raise ValueError(f"Index '{index_name}' does not exist")
         return func(self, index_name, *args, **kwargs)
@@ -14,11 +47,11 @@ def validate_index_exists(func: Callable) -> Callable:
     return wrapper
 
 
-def auto_save(func: Callable) -> Callable:
+def auto_save (func: Callable) -> Callable:
     """Decorator to automatically save index after modifications"""
 
     @wraps(func)
-    def wrapper(self, index_name: str, *args, **kwargs):
+    def wrapper (self, index_name: str, *args, **kwargs):
         result = func(self, index_name, *args, **kwargs)
         if hasattr(self, '_save_index'):
             self._save_index(index_name)
@@ -27,12 +60,12 @@ def auto_save(func: Callable) -> Callable:
     return wrapper
 
 
-def handle_exceptions(default_return=None):
+def handle_exceptions (default_return=None):
     """Decorator for exception handling with optional default return"""
 
-    def decorator(func: Callable) -> Callable:
+    def decorator (func: Callable) -> Callable:
         @wraps(func)
-        def wrapper(*args, **kwargs):
+        def wrapper (*args, **kwargs):
             try:
                 return func(*args, **kwargs)
             except Exception as e:
@@ -45,15 +78,15 @@ def handle_exceptions(default_return=None):
     return decorator
 
 
-def cache_result(max_size: int = 128):
+def cache_result (max_size: int = 128):
     """Simple cache decorator for search results"""
 
-    def decorator(func: Callable) -> Callable:
+    def decorator (func: Callable) -> Callable:
         cache = {}
         access_order = []
 
         @wraps(func)
-        def wrapper(*args, **kwargs):
+        def wrapper (*args, **kwargs):
             # Create cache key from args and kwargs
             cache_key = str(args) + str(sorted(kwargs.items()))
 
@@ -82,11 +115,11 @@ def cache_result(max_size: int = 128):
     return decorator
 
 
-def validate_document(func: Callable) -> Callable:
+def validate_document (func: Callable) -> Callable:
     """Decorator to validate document structure"""
 
     @wraps(func)
-    def wrapper(self, index_name: str, doc_id: str, document: Dict[str, Any], *args, **kwargs):
+    def wrapper (self, index_name: str, doc_id: str, document: Dict[str, Any], *args, **kwargs):
         if not isinstance(document, dict):
             raise ValueError("Document must be a dictionary")
 
@@ -95,7 +128,7 @@ def validate_document(func: Callable) -> Callable:
 
         # Validate against mapping if it exists
         if index_name in self.mappings:
-            self._validate_document_against_mapping(document, self.mappings[index_name])
+            _validate_document_against_mapping(document, self.mappings[index_name])
 
         return func(self, index_name, doc_id, document, *args, **kwargs)
 

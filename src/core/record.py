@@ -27,6 +27,12 @@ class Record(ABC):
 
     @classmethod
     @hidden_method
+    @abstractmethod
+    def get_record_fields_to_validate (cls) -> list[str]:
+        pass
+
+    @classmethod
+    @hidden_method
     def get_duplicate_check_fields (cls) -> list[str]:
         return cls.get_record_required_fields()
 

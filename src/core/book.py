@@ -4,8 +4,18 @@ from abc import ABC, abstractmethod
 from collections import UserDict
 
 from src.core.decorators import method_for_bot_interface
+from src.core.fast_search_adapter import FastSearchAdapter
 from src.core.record import Record
 
+RETURN_RESULT_NEW = 'added'
+RETURN_RESULT_FOUND = 'found'
+RETURN_RESULT_NOT_FOUND = 'not-found'
+RETURN_RESULT_DUPLICATE = 'duplicate'
+RETURN_RESULT_UPDATED = 'updated'
+RETURN_RESULT_UPDATE_CAUSES_DUPLICATE = 'update-causes-duplicate'
+RETURN_RESULT_NOT_UPDATED = 'not-updated'
+RETURN_RESULT_DELETED = 'deleted'
+RETURN_RESULT_NOT_DELETED = 'not-deleted'
 
 class Book(ABC, UserDict[str, Record]):
     PARAM_SEARCH_PREFIX = 'search_by'
@@ -15,15 +25,7 @@ class Book(ABC, UserDict[str, Record]):
     PARAM_MULTI_VALUE_TO_UPDATE_PREFIX = 'new'
     PARAM_MULTI_VALUE_TO_DELETE_PREFIX = 'delete'
 
-    RETURN_RESULT_NEW = 'added'
-    RETURN_RESULT_FOUND = 'found'
-    RETURN_RESULT_NOT_FOUND = 'not-found'
-    RETURN_RESULT_DUPLICATE = 'duplicate'
-    RETURN_RESULT_UPDATED = 'updated'
-    RETURN_RESULT_UPDATE_CAUSES_DUPLICATE = 'update-causes-duplicate'
-    RETURN_RESULT_NOT_UPDATED = 'not-updated'
-    RETURN_RESULT_DELETED = 'deleted'
-    RETURN_RESULT_NOT_DELETED = 'not-deleted'
+    fast_search = FastSearchAdapter.get_instance()
 
     @classmethod
     def get_search_prefix (cls):
@@ -60,13 +62,13 @@ class Book(ABC, UserDict[str, Record]):
         record_class = self.get_record_class()
 
         result_code, found_duplicate, conditions = self.get_records(False, **kwargs)
-        if result_code == self.RETURN_RESULT_FOUND:
-            return self.RETURN_RESULT_DUPLICATE, found_duplicate, conditions
+        if result_code == RETURN_RESULT_FOUND:
+            return RETURN_RESULT_DUPLICATE, found_duplicate, conditions
 
         record_object = record_class(**kwargs)
         self.data[record_object.record_as_option()] = record_object
 
-        return self.RETURN_RESULT_NEW, [record_object], {}
+        return RETURN_RESULT_NEW, [record_object], {}
 
     @method_for_bot_interface
     def get_records (self, need_to_check_suffix: bool = True, for_update_operations: bool = False, **kwargs) -> tuple[
@@ -87,9 +89,62 @@ class Book(ABC, UserDict[str, Record]):
         found_records = [record for record in self.data.values() if self._matches_conditions(record, conditions)]
 
         if not found_records:
-            return self.RETURN_RESULT_NOT_FOUND, [], conditions
+            return RETURN_RESULT_NOT_FOUND, [], conditions
 
-        return self.RETURN_RESULT_FOUND, found_records, conditions
+        return RETURN_RESULT_FOUND, found_records, conditions
+
+    def search_records(self, query: str | dict[str, str]) -> tuple[str, list[Record], dict[str, str]]:
+        """Search records using full-text search"""
+        if not query:
+            return RETURN_RESULT_NOT_FOUND, [], {}
+
+        # Validate minimum search length
+        min_length = FastSearchAdapter.MIN_SEARCH_LENGTH
+        if isinstance(query, str) and len(query) < min_length:
+            raise ValueError(f"Search query must be at least {min_length} characters long")
+
+        # Use fast search with query
+        try:
+            result_dicts = self.fast_search.search_records(
+                self.get_book_name(),
+                query,
+                None,  # No filters
+                100    # Limit to 100 results
+            )
+
+            # Map results back to actual record objects
+            found_records = []
+            for result in result_dicts:
+                record_id = result.get("id")
+                # Find the actual record object
+                record_found = False
+                for record in self.data.values():
+                    rec_id = record.fields.get("id") or id(record)
+                    if str(rec_id) == str(record_id):
+                        found_records.append(record)
+                        record_found = True
+                        break
+
+                # If we couldn't find the record, it might be because of ID mismatches
+                if not record_found:
+                    # Try matching on key fields
+                    for record in self.data.values():
+                        # Compare critical fields
+                        matches = True
+                        for key, value in result.items():
+                            if key in record.fields and str(record.fields[key]) != str(value):
+                                matches = False
+                                break
+                        if matches:
+                            found_records.append(record)
+                            # Update the ID for future searches
+                            record.fields['id'] = record_id
+                            break
+
+            return RETURN_RESULT_FOUND, found_records, {"query":query}
+        except ValueError as e:
+            # Re-raise with the same message
+            raise ValueError(str(e))
 
     @method_for_bot_interface
     def update_records (self, **kwargs) -> tuple[str, list[Record], dict[str, str]]:
@@ -103,12 +158,13 @@ class Book(ABC, UserDict[str, Record]):
 
         # returns a list of all records that match the conditions
         result_code, records_to_update, conditions = self.get_records(True, True, **kwargs)
+
+        if result_code == RETURN_RESULT_NOT_FOUND:
+            return RETURN_RESULT_NOT_UPDATED, list(self.data.values()), conditions
+
         fields_to_update = self._parse_fields_to_update_from_kwargs(**kwargs)
         multi_field_values_to_update = self._parse_multi_value_fields_from_kwargs(True, **kwargs)
         multi_field_values_to_delete = self._parse_multi_value_fields_to_delete_from_kwargs(**kwargs)
-
-        if result_code == self.RETURN_RESULT_NOT_FOUND:
-            return self.RETURN_RESULT_NOT_UPDATED, list(self.data.values()), conditions
 
         for record in records_to_update:
             for field, value in fields_to_update.items():
@@ -131,7 +187,7 @@ class Book(ABC, UserDict[str, Record]):
                         multi_value_field_value_to_delete, None
                     )
 
-        return self.RETURN_RESULT_UPDATED, records_to_update, conditions
+        return RETURN_RESULT_UPDATED, records_to_update, conditions
 
     def _parse_fields_conditions_from_kwargs (self, need_to_check_suffix: bool, **kwargs):
         conditions = {}
@@ -196,14 +252,14 @@ class Book(ABC, UserDict[str, Record]):
         """
         result_code, records_to_delete, conditions = self.get_records(**kwargs)
 
-        if result_code == self.RETURN_RESULT_NOT_FOUND:
-            return self.RETURN_RESULT_NOT_DELETED, list(self.data.values()), conditions
+        if result_code == RETURN_RESULT_NOT_FOUND:
+            return RETURN_RESULT_NOT_DELETED, list(self.data.values()), conditions
 
         for record_to_delete in records_to_delete:
             del self.data[record_to_delete.record_as_option()]
 
         # returns deleted records
-        return self.RETURN_RESULT_DELETED, records_to_delete, {}
+        return RETURN_RESULT_DELETED, records_to_delete, {}
 
     def _matches_conditions (self, record, conditions: dict) -> bool:
         multi_value_fields = self.get_record_class().get_record_multi_value_fields()
