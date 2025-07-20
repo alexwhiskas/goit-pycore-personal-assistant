@@ -135,14 +135,9 @@ class BookManager:
                             choice_add = 'add'
                             choice_update = 'update'
 
-                            # # used for testing purposes start
-                            # # user_preferred_record_operation = choice_add
-                            # user_preferred_record_operation = choice_update
-                            # # used for testing purposes end
-
                             user_preferred_record_operation = input(
                                 f"Do you want to update existing record or add a new one? ({choice_add}/{choice_update}), if nothing entered, moving to prev operation: "
-                            ).strip() # todo: check issue if nothing entered
+                            ).strip()
 
                             if user_preferred_record_operation == choice_add:
                                 print(
@@ -188,14 +183,13 @@ class BookManager:
                                         if isinstance(multi_value_condition, str):
                                             conditions[multi_value_field] = multi_value_condition
                                         else:
-                                            # todo: running of add-note-tag command and searching by non-existing tag - causes error
                                             for multi_value_condition_key, multi_value_condition_value in multi_value_condition.items():
                                                 if not multi_value_condition_key:
                                                     conditions[multi_value_field] = multi_value_condition_value
                                                 else:
                                                     conditions[multi_value_field] = multi_value_condition_key
 
-                                # self.animate_process_func('Looking for records to suggest')
+                                self.animate_process_func('Looking for records to suggest')
                                 found_records_result_code, found_records, conditions_to_find_by = current_operation_book.search_records(conditions)
 
                                 if found_records:
@@ -204,15 +198,12 @@ class BookManager:
                                         records_options[found_record.record_as_option()] = found_record
 
                                     return_to_prev_step_option = "---Return to previous step"
-                                    print(f"Records options: {list(records_options.keys())}") # todo: to remove
 
-                                    selection_from_founded_records = "title: title111" # todo: remove after test
-                                    # selection_from_founded_records = questionary.select(
-                                    #     'Choose from one of the following records to process:',
-                                    #     list(records_options.keys()) + [return_to_prev_step_option],
-                                    # ).ask()
+                                    selection_from_founded_records = questionary.select(
+                                        'Choose from one of the following records to process:',
+                                        list(records_options.keys()) + [return_to_prev_step_option],
+                                    ).ask()
 
-                                    # todo: complete emulation of update_record command execution
                                     if result_code == RETURN_RESULT_NOT_UPDATED:
                                         if selection_from_founded_records == return_to_prev_step_option:
                                             return PREV_OPERATION
@@ -256,7 +247,6 @@ class BookManager:
                                             return prompted_args
 
                                         prepared_prompt_args = build_record_to_update_dict_from_objects(new_record_data, found_record_to_update)
-                                        print('Prepared prompted args for update emulation :', prepared_prompt_args)
                                         suggested_update_result_code, suggested_update_result_records, suggested_update_result_conditions = current_operation_book.update_records(**prepared_prompt_args)
 
                                         if suggested_update_result_code == RETURN_RESULT_NOT_UPDATED:
@@ -319,10 +309,6 @@ class BookManager:
                     bookInstance = obj()
                     book_name = bookInstance.get_book_name()
 
-                    # # to delete start
-                    # self.books[book_name] = bookInstance  # e.g. "contact": ContactBook()
-                    # continue
-                    # to delete end
                     book_pkl_data_file_path = books_root / book_name / f'{book_name}_book_data.pkl'
                     try:
                         with open(book_pkl_data_file_path, "rb") as f:
