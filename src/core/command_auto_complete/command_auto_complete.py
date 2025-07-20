@@ -202,19 +202,10 @@ class CommandAutoCompletion:
 
         return args_dict
 
-    def collect_command_arguments (self, selected_command: 'str' = ""):
-        # Check if command needs arguments
-        if selected_command in self.extracted_from_groups_command_params and self.extracted_from_groups_command_params[selected_command]:
-            args = self.prompt_for_arguments(selected_command)
-            return args
-
-        return {}
-
     def prompt_with_completion (self, prompt_text: str = "Enter command: ") -> None | Tuple[str, Dict[str, str]] | Tuple[None, None]:
         while True:
             user_input = input(prompt_text)
-            print(f"User input: {user_input}") # todo: remove
-            user_input = user_input.strip() # todo: fix potential issue, if user_input is None
+            user_input = user_input.strip()
 
             # If user entered nothing, continue
             if not user_input:
@@ -252,6 +243,7 @@ class CommandAutoCompletion:
                     print("You entered the wrong answer, let's try again.")
                     continue
 
+                del user_input, choice, should_suggest, matches, best_match
                 return selected_command, self.collect_command_arguments(selected_command)
             else:
                 # No suggestions needed or no matches found
@@ -281,7 +273,16 @@ class CommandAutoCompletion:
                                 commands_to_propose.append(group_command)
                                 amount_of_proposed_commands += 1
 
+                    del proposed_groups, commands_to_propose, grouped_commands_to_propose, commands_left_to_propose, group_name, group_commands, amount_of_proposed_commands
                     print(f"{Fore.GREEN}{', '.join(self.groups[:10])}{Style.RESET_ALL}")  # Show first 10 commands
                     continue
                 else:
                     continue
+
+    def collect_command_arguments (self, selected_command: 'str' = ""):
+        # Check if command needs arguments
+        if selected_command in self.extracted_from_groups_command_params and self.extracted_from_groups_command_params[selected_command]:
+            args = self.prompt_for_arguments(selected_command)
+            return args
+
+        return {}

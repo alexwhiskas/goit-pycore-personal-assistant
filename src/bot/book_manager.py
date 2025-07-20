@@ -4,21 +4,23 @@ import importlib
 import inspect
 import pickle
 import time
-import questionary
-
 from collections import defaultdict
 from pathlib import Path
 from typing import Dict
+
+import questionary
 from colorama import Fore, Style
 
-from src.core.book import Book, RETURN_RESULT_NEW, RETURN_RESULT_FOUND, RETURN_RESULT_DUPLICATE, RETURN_RESULT_DELETED, RETURN_RESULT_NOT_DELETED, RETURN_RESULT_UPDATED, RETURN_RESULT_NOT_UPDATED
-from src.core.response_code import PREV_OPERATION, RETRY_OPERATION, EXIT_OPERATION
+from src.core.book import (
+    Book, RETURN_RESULT_NEW, RETURN_RESULT_FOUND, RETURN_RESULT_DUPLICATE, RETURN_RESULT_DELETED,
+    RETURN_RESULT_NOT_DELETED, RETURN_RESULT_UPDATED, RETURN_RESULT_NOT_UPDATED
+)
 from src.core.command_auto_complete.command_auto_complete import CommandAutoCompletion
 from src.core.fast_search_adapter import FastSearchAdapter
+from src.core.response_code import PREV_OPERATION, RETRY_OPERATION, EXIT_OPERATION
 
 
 class BookManager:
-
     books: Dict[str, Book] = {}
 
     def __init__ (self):
@@ -106,7 +108,7 @@ class BookManager:
         print(f"{Fore.YELLOW}ℹ️ Press Ctrl+C to exit at any time{Style.RESET_ALL}")
         print(f"{Fore.CYAN}{'=' * 50}{Style.RESET_ALL}\n")
 
-    def start(self, book_selection_prompt):
+    def start (self, book_selection_prompt):
         grouped_commands = copy.deepcopy(self.supported_operations_per_book)
         grouped_commands['global'] = {
             'search-all': {'query': 'text to search across all books'},
@@ -130,7 +132,7 @@ class BookManager:
             print(f"\n{Fore.GREEN}✅ Address book saved.{Style.RESET_ALL}")
             print(f"{Fore.YELLOW}👋 Goodbye!{Style.RESET_ALL}")
 
-    def _handle_user_command(self, completer):
+    def _handle_user_command (self, completer):
         cmd_and_args = completer.prompt_with_completion(f"{Fore.CYAN}💬 Enter a command: {Style.RESET_ALL}")
         user_input, prompted_args = cmd_and_args
 
@@ -139,7 +141,7 @@ class BookManager:
             return RETRY_OPERATION
 
         if isinstance(prompted_args, str) and prompted_args == PREV_OPERATION:
-            return self._handle_user_command(completer)
+            return RETRY_OPERATION
         elif user_input == EXIT_OPERATION:
             return EXIT_OPERATION
 
@@ -148,7 +150,9 @@ class BookManager:
         if isinstance(command_execution_result, tuple) and len(command_execution_result) == 3:
             result_code, result_records, conditions = command_execution_result
             book_name_from_operation = user_input.split("-")[1]
-            current_operation_book = self.books.get(book_name_from_operation) or self.books.get(book_name_from_operation[:-1])
+            current_operation_book = self.books.get(book_name_from_operation) or self.books.get(
+                book_name_from_operation[:-1]
+                )
             print(f"Current operation book: {current_operation_book}")
 
             if result_code in [RETURN_RESULT_NEW, RETURN_RESULT_UPDATED, RETURN_RESULT_DELETED, RETURN_RESULT_FOUND]:
@@ -172,7 +176,7 @@ class BookManager:
                         f'We\'ll re-start execution of current command. Please, update one of the following params to create new record when asked next time: '
                         + self._dict_to_string(conditions)
                     )
-                    return self._handle_user_command(completer)
+                    return RETRY_OPERATION
                 else:
                     current_operation_book.update_records(**prompted_args)
                     return RETURN_RESULT_UPDATED
@@ -198,7 +202,9 @@ class BookManager:
                     return PREV_OPERATION
 
                 elif user_preferred_record_operation == suggest_existing:
-                    return self._handle_suggest_existing(current_operation_book, conditions, prompted_args, completer, result_code)
+                    return self._handle_suggest_existing(
+                        current_operation_book, conditions, prompted_args, completer, result_code
+                        )
 
                 return PREV_OPERATION
             else:
@@ -215,7 +221,7 @@ class BookManager:
         else:
             return RETRY_OPERATION
 
-    def _handle_suggest_existing(self, book, conditions, prompted_args, completer, result_code):
+    def _handle_suggest_existing (self, book, conditions, prompted_args, completer, result_code):
         # Mutate multi-value conditions to flat values if needed
         for field in book.get_record_class().get_record_multi_value_fields():
             cond = conditions.get(field)
@@ -227,7 +233,9 @@ class BookManager:
         result_code, found_records, _ = book.search_records(conditions)
 
         if not found_records:
-            print(f"Returning to previous step, we couldn't find any records for your keywords: {self._dict_to_string(conditions)}")
+            print(
+                f"Returning to previous step, we couldn't find any records for your keywords: {self._dict_to_string(conditions)}"
+                )
             return PREV_OPERATION
 
         record_options = {record.record_as_option(): record for record in found_records}
@@ -246,14 +254,16 @@ class BookManager:
         update_result_code, updated_records, _ = book.update_records(**updated_args)
 
         if update_result_code == RETURN_RESULT_NOT_UPDATED:
-            print(f"Returning to previous step, we couldn't find any records for your keywords: {self._dict_to_string(conditions)}")
+            print(
+                f"Returning to previous step, we couldn't find any records for your keywords: {self._dict_to_string(conditions)}"
+                )
         else:
             print("Successfully updated suggested record(s):")
             self.print_result_records("", updated_records)
 
         return PREV_OPERATION
 
-    def _build_record_update_args(self, record, new_data):
+    def _build_record_update_args (self, record, new_data):
         args = {}
         record_fields = record.get_record_fields()
         for field in record_fields:
@@ -265,7 +275,9 @@ class BookManager:
             if mv_data:
                 args[Book.get_search_prefix() + '_' + mv_field] = list(mv_data.values())
 
-            args[Book.get_multi_value_to_update_prefix() + '_' + mv_field] = str(new_data.get(Book.get_multi_value_to_update_prefix() + '_' + mv_field))
+            args[Book.get_multi_value_to_update_prefix() + '_' + mv_field] = str(
+                new_data.get(Book.get_multi_value_to_update_prefix() + '_' + mv_field)
+                )
             search_val = new_data.get(Book.get_multi_value_to_search_prefix() + '_' + mv_field)
             if search_val:
                 args[Book.get_multi_value_to_search_prefix() + '_' + mv_field] = str(mv_data.get(search_val))
@@ -300,15 +312,6 @@ class BookManager:
             raise ValueError(f'No such book: {book_name}')
         return self.books[book_name]
 
-    def get_supported_operations (self) -> dict[str, list]:
-        commands = {}
-
-        for book_name, book in self.books.items():
-            book_supported_operations = self.get_book_supported_operations(book_name, book)
-            commands = {**commands, **book_supported_operations}
-
-        return commands
-
     def get_book_supported_operations (self, book_name: str, book: Book):
         commands = {}
         # book records operations
@@ -320,8 +323,7 @@ class BookManager:
             commands[cmd] = method_acceptable_params
 
         # for children fields operations - show all record fields to search by
-        record_fields = self.books[
-                            book_name].get_record_class().get_record_fields() + book.get_record_class().get_record_multi_value_fields()
+        record_fields = self.books[book_name].get_record_class().get_record_fields() + book.get_record_class().get_record_multi_value_fields()
 
         # child fields operations
         for record_class_multi_field in book.get_record_class().get_record_multi_value_fields():
@@ -377,7 +379,7 @@ class BookManager:
 
         return methods_to_process
 
-    def run_command(self, command_name: str, **kwargs):
+    def run_command (self, command_name: str, **kwargs):
         # Handle global help command
         if command_name == "help":
             group = kwargs.get("group", "")
@@ -395,7 +397,8 @@ class BookManager:
             query = kwargs.get("query")
             if not query or len(query) < FastSearchAdapter.MIN_SEARCH_LENGTH:
                 print(
-                    f"{Fore.RED}⚠️ Search query must be at least {FastSearchAdapter.MIN_SEARCH_LENGTH} characters long{Style.RESET_ALL}")
+                    f"{Fore.RED}⚠️ Search query must be at least {FastSearchAdapter.MIN_SEARCH_LENGTH} characters long{Style.RESET_ALL}"
+                )
                 return []
 
             all_results = []
