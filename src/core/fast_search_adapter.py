@@ -60,7 +60,8 @@ class FastSearchAdapter:
             if values:
                 # Join values for searchability
                 if isinstance(values, dict):
-                    record_dict[field_name] = ", ".join(values.keys())
+                    values_lust = list(filter(lambda x: x is not None, values.keys()))
+                    record_dict[field_name] = ", ".join(values_lust)
                 else:
                     record_dict[field_name] = str(values)
 
@@ -92,12 +93,33 @@ class FastSearchAdapter:
                 if isinstance(query, dict):
                     results = []
 
-                    for query_value in query.values():
-                        results += self.search_module.search(book_name, query_value, filters, limit)
-                else:
-                    results = self.search_module.search(book_name, query, filters, limit)
+                    for field, query_value in query.items():
+                        # Skip empty values or values that are too short
+                        if not query_value or len(str(query_value)) < self.MIN_SEARCH_LENGTH:
+                            continue
 
-                return [result["document"] for result in results]
+                        # Search with the specific value
+                        field_results = self.search_module.search(book_name, query_value, filters, limit)
+                        results.extend(field_results)
+
+                    # Handle unique results based on document ID
+                    seen_ids = set()
+                    unique_results = []
+
+                    for result in results:
+                        doc_id = result.get("id") or result["document"].get("id")
+                        if doc_id not in seen_ids:
+                            seen_ids.add(doc_id)
+                            unique_results.append(result)
+
+                    return [result["document"] for result in unique_results]
+                else:
+                    # Validate string query length
+                    if len(str(query)) < self.MIN_SEARCH_LENGTH:
+                        return []
+
+                    results = self.search_module.search(book_name, query, filters, limit)
+                    return [result["document"] for result in results]
             except Exception as e:
                 print(f"Search error: {e}")
                 return []
@@ -137,7 +159,8 @@ class FastSearchAdapter:
 
     def update_record(self, book_name: str, record: Record):
         """Update a record in the search index (delete and re-index)"""
-        record_id = record.fields.get("id") or id(record)
+        record_id = record.fields.get("id") or record.record_as_option()
         self.delete_record(book_name, str(record_id))
         self.index_record(book_name, record)
         return record_id
+
