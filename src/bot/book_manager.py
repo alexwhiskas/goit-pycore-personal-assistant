@@ -52,9 +52,6 @@ class BookManager:
                 elif result == self.EXIT_OPERATION:
                     self.end()
 
-    def handle_non_book_operation (self, operation_name):
-        exit('lololo byebye, no handle of non-book operation yet!')
-
     def continue_with_book_operations (self, book_name):
         supported_operations = self.supported_operations_per_book[book_name]
         supported_operations_keys = list(supported_operations.keys())
@@ -87,6 +84,7 @@ class BookManager:
                         # todo: implement variation of list of required fields based on user operation input
                         key_label_prompt = f'Enter {'required' if key in required_record_fields else 'optional'} value for {key_label}: '
                         user_input = input(key_label_prompt).strip()
+                        # todo: add validation here based on field name and Record validate_* methods
 
                         def check_input_for_required_field (required_field_input_value: str = ''):
                             if not required_field_input_value and key in required_record_fields:
@@ -350,6 +348,7 @@ class BookManager:
                 # preparing for processing only not static and not hidden from bot user functions
                 if (callable(getattr(book, method_name))
                         and getattr(method, '_hidden', False) is not True
+                        and getattr(method, '_method_for_bot_interface', False) is True
                         and not isinstance(inspect.getattr_static(book, method_name), classmethod)):
                     methods_to_process.append(method_name)
 

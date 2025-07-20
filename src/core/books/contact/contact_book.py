@@ -6,11 +6,17 @@ from typing import List
 from src.core.book import Book
 from src.core.decorators import hidden_method, method_args_as_command_params
 
+
 class ContactBook(Book):
     # used only for code
     @hidden_method
     def get_book_name (self) -> str:
         return 'contact'
+
+    @classmethod
+    def get_record_class (cls):
+        from src.core.books.contact.contact_record import ContactRecord
+        return ContactRecord
 
     @method_args_as_command_params
     def get_coming_birthdays_from_now (self, days_ahead: int = 0) -> List[str]:
@@ -23,7 +29,7 @@ class ContactBook(Book):
 
         matching_records = []
 
-        for record in self.records:
+        for record in self.data.values():
             birthday = getattr(record, 'birthday', None)
             if not birthday:
                 continue

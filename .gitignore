@@ -8,3 +8,5 @@ __pycache__/
 .env.*
 .vscode/
 .devcontainer/.python-version
+src/core/books/contact/contact_book_data.pkl
+src/core/books/note/note_book_data.pkl

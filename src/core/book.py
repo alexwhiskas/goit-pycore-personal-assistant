@@ -1,16 +1,13 @@
 # src/core/book.py
 
 from abc import ABC, abstractmethod
-from typing import Any
-from importlib import util
-import inspect
-import pickle
-from pathlib import Path
+from collections import UserDict
 
+from src.core.decorators import method_for_bot_interface
 from src.core.record import Record
 
 
-class Book(ABC):
+class Book(ABC, UserDict[str, Record]):
     PARAM_SEARCH_PREFIX = 'search_by'
     PARAM_UPDATE_PREFIX = 'update'
 
@@ -49,36 +46,17 @@ class Book(ABC):
         return cls.PARAM_MULTI_VALUE_TO_DELETE_PREFIX
 
     @classmethod
+    @abstractmethod
     def get_record_class (cls):
-        # getting current file path of our Book class
-        book_file = Path(inspect.getfile(cls))
-        book_name = cls.__name__  # e.g., ContactBook
-
-        # computing expected file and class name
-        record_file = book_file.with_name(
-            book_file.name.replace('book', 'record')
-        )  # e.g. replacing contact_book with contact_record
-        record_class_name = book_name.replace('Book', 'Record')  # e.g. replacing ContactBook with ContactRecord
-
-        # dynamically importing module from record file path
-        module_name = f"{record_file.stem}"  # unique temp name
-        spec = util.spec_from_file_location(module_name, str(record_file))
-        module = util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-
-        # getting and returning the record class
-        record_class = getattr(module, record_class_name)
-        return record_class
-
-    def __init__ (self):
-        self.records = []
+        pass
 
     @abstractmethod
     def get_book_name (self) -> str:
         # children classes must return the book's short name (e.g. 'contact', 'note')
         pass
 
-    def add_record(self, **kwargs) -> tuple[str, list[Record], dict[str, str]]:
+    @method_for_bot_interface
+    def add_record (self, **kwargs) -> tuple[str, list[Record], dict[str, str]]:
         record_class = self.get_record_class()
 
         result_code, found_duplicate, conditions = self.get_records(False, **kwargs)
@@ -86,11 +64,13 @@ class Book(ABC):
             return self.RETURN_RESULT_DUPLICATE, found_duplicate, conditions
 
         record_object = record_class(**kwargs)
-        self.records.append(record_object)
+        self.data[record_object.record_as_option()] = record_object
 
         return self.RETURN_RESULT_NEW, [record_object], {}
 
-    def get_records (self, need_to_check_suffix: bool = True, for_update_operations: bool = False, **kwargs) -> tuple[str, list[Record], dict[str, str]]:
+    @method_for_bot_interface
+    def get_records (self, need_to_check_suffix: bool = True, for_update_operations: bool = False, **kwargs) -> tuple[
+        str, list[Record], dict[str, str]]:
         """
         Example of 'conditions' param:
         conditions = {
@@ -104,13 +84,14 @@ class Book(ABC):
         }
 
         # returns a list of all records that match the conditions
-        found_records = [record for record in self.records if self._matches_conditions(record, conditions)]
+        found_records = [record for record in self.data.values() if self._matches_conditions(record, conditions)]
 
         if not found_records:
             return self.RETURN_RESULT_NOT_FOUND, [], conditions
 
         return self.RETURN_RESULT_FOUND, found_records, conditions
 
+    @method_for_bot_interface
     def update_records (self, **kwargs) -> tuple[str, list[Record], dict[str, str]]:
         """
         Example of 'conditions' and 'fields_to_update' vars contents:
@@ -127,7 +108,7 @@ class Book(ABC):
         multi_field_values_to_delete = self._parse_multi_value_fields_to_delete_from_kwargs(**kwargs)
 
         if result_code == self.RETURN_RESULT_NOT_FOUND:
-            return self.RETURN_RESULT_NOT_UPDATED, self.records, conditions
+            return self.RETURN_RESULT_NOT_UPDATED, list(self.data.values()), conditions
 
         for record in records_to_update:
             for field, value in fields_to_update.items():
@@ -138,26 +119,34 @@ class Book(ABC):
                     if multi_value_field_value_to_replace == '':
                         multi_value_field_value_to_replace = new_multi_value_field_value
 
-                    record.multi_value_fields.setdefault(multi_value_field_name, {}).pop(multi_value_field_value_to_replace, None)
-                    record.multi_value_fields[multi_value_field_name][new_multi_value_field_value] = new_multi_value_field_value
+                    record.multi_value_fields.setdefault(multi_value_field_name, {}).pop(
+                        multi_value_field_value_to_replace, None
+                    )
+                    record.multi_value_fields[multi_value_field_name][
+                        new_multi_value_field_value] = new_multi_value_field_value
 
             for multi_value_field_name_to_delete, multi_field_values_to_delete in multi_field_values_to_delete.items():
                 for multi_value_field_value_to_delete in multi_field_values_to_delete:
-                    record.multi_value_fields.setdefault(multi_value_field_name_to_delete, {}).pop(multi_value_field_value_to_delete, None)
+                    record.multi_value_fields.setdefault(multi_value_field_name_to_delete, {}).pop(
+                        multi_value_field_value_to_delete, None
+                    )
 
         return self.RETURN_RESULT_UPDATED, records_to_update, conditions
 
-    def _parse_fields_conditions_from_kwargs(self, need_to_check_suffix: bool, **kwargs):
+    def _parse_fields_conditions_from_kwargs (self, need_to_check_suffix: bool, **kwargs):
         conditions = {}
         record_required_fields = self.get_record_class().get_record_required_fields()
 
         for arg_key, arg_value in kwargs.items():
-            if (not need_to_check_suffix and arg_key in record_required_fields) or (arg_key.startswith(Book.get_search_prefix()) and arg_value):
+            if (
+                    (not need_to_check_suffix and arg_key in record_required_fields)
+                    or (arg_key.startswith(Book.get_search_prefix()) and arg_value)
+            ):
                 conditions[arg_key.replace(Book.get_search_prefix() + '_', '')] = arg_value
 
         return conditions
 
-    def _parse_fields_to_update_from_kwargs(self, **kwargs):
+    def _parse_fields_to_update_from_kwargs (self, **kwargs):
         fields_to_update = {}
 
         for arg_key, arg_value in kwargs.items():
@@ -166,7 +155,7 @@ class Book(ABC):
 
         return fields_to_update
 
-    def _parse_multi_value_fields_from_kwargs(self, for_update_operation: bool, **kwargs):
+    def _parse_multi_value_fields_from_kwargs (self, for_update_operation: bool, **kwargs):
         multi_field_values = {}
 
         multi_value_fields = self.get_record_class().get_record_multi_value_fields()
@@ -186,7 +175,7 @@ class Book(ABC):
 
         return multi_field_values
 
-    def _parse_multi_value_fields_to_delete_from_kwargs(self, **kwargs):
+    def _parse_multi_value_fields_to_delete_from_kwargs (self, **kwargs):
         multi_field_values_to_delete = {}
 
         for arg_key, arg_value in kwargs.items():
@@ -196,6 +185,7 @@ class Book(ABC):
 
         return multi_field_values_to_delete
 
+    @method_for_bot_interface
     def delete_records (self, **kwargs) -> tuple[str, list[Record], dict[str, str]]:
         """
         Example of 'conditions' param:
@@ -207,10 +197,10 @@ class Book(ABC):
         result_code, records_to_delete, conditions = self.get_records(**kwargs)
 
         if result_code == self.RETURN_RESULT_NOT_FOUND:
-            return self.RETURN_RESULT_NOT_DELETED, self.records, conditions
+            return self.RETURN_RESULT_NOT_DELETED, list(self.data.values()), conditions
 
         for record_to_delete in records_to_delete:
-            self.records.remove(record_to_delete)
+            del self.data[record_to_delete.record_as_option()]
 
         # returns deleted records
         return self.RETURN_RESULT_DELETED, records_to_delete, {}
