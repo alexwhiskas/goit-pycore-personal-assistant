@@ -53,7 +53,7 @@ class FastSearchAdapter:
 
         # Ensure we have an ID
         if "id" not in record_dict:
-            record_dict["id"] = str(id(record))
+            record_dict["id"] = str(record.record_as_option())
 
         # Add multi-value fields
         for field_name, values in record.multi_value_fields.items():
