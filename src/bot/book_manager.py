@@ -85,7 +85,7 @@ class BookManager:
 
     def start (self, book_selection_prompt):
         grouped_commands = self.supported_operations_per_book
-        grouped_commands['global'] = {'search-all': {'query': 'query'}}
+        grouped_commands['global'] = {'search-all': {'query': 'text to search across all books'}}
         grouped_commands['global']['help'] = {'group': ', '.join(grouped_commands.keys())}
         grouped_commands['global']['exit'] = {}
 
@@ -325,6 +325,11 @@ class BookManager:
             self.supported_operations_per_book[book_name] = self.get_book_supported_operations(book_name, book)
 
     def save_books_state (self):
+        # Ensure search indices are up to date before saving
+        for book_name, book in self.books.items():
+            for record in book.data.values():
+                self.fast_search.update_record(book_name, record)
+
         books_root = Path(__file__).parent.parent / 'core' / 'books'
 
         for book in self.books:
@@ -371,7 +376,7 @@ class BookManager:
                 params = {}
                 plural_part = ('s' if operation_name == 'get' else '')
                 # e.g. get-notes-tags, get-contacts-phone-numbers
-                command_name = f'{operation_name}-{book_name}{plural_part}-{record_class_multi_field.replace('_', '-')}{plural_part}'
+                command_name = f"{operation_name}-{book_name}{plural_part}-{record_class_multi_field.replace('_', '-')}{plural_part}"
 
                 if operation_name in ['add', 'get', 'update', 'delete']:
                     for field_name in record_fields:
@@ -417,7 +422,43 @@ class BookManager:
 
         return methods_to_process
 
-    def run_command (self, command_name: str, **kwargs):
+    def run_command(self, command_name: str, **kwargs):
+        # Handle global help command
+        if command_name == "help":
+            group = kwargs.get("group")
+            if group and group in self.supported_operations_per_book:
+                print(f"\n{Fore.BLUE}📚 Help for {group.capitalize()} commands:{Style.RESET_ALL}")
+                self._print_supported_grouped_commands({group: self.supported_operations_per_book[group]})
+            else:
+                print(f"\n{Fore.BLUE}📚 All available commands:{Style.RESET_ALL}")
+                self._print_supported_grouped_commands(self.supported_operations_per_book)
+            return []
+
+        # Handle global search command
+        if command_name == "search-all":
+            query = kwargs.get("query")
+            if not query or len(query) < FastSearchAdapter.MIN_SEARCH_LENGTH:
+                print(
+                    f"{Fore.RED}⚠️ Search query must be at least {FastSearchAdapter.MIN_SEARCH_LENGTH} characters long{Style.RESET_ALL}")
+                return []
+
+            all_results = []
+            for book_name, book in self.books.items():
+                try:
+                    result_code, found_records, _ = book.search_records(query)
+                    if result_code == RETURN_RESULT_FOUND:
+                        all_results.extend(found_records)
+                except ValueError as e:
+                    print(f"{Fore.RED}⚠️ Error searching {book_name}: {e}{Style.RESET_ALL}")
+
+            if not all_results:
+                print(f"{Fore.YELLOW}ℹ️ No records found matching '{query}'{Style.RESET_ALL}")
+            else:
+                print(f"{Fore.GREEN}✅ Found {len(all_results)} records matching '{query}'{Style.RESET_ALL}")
+
+            return all_results
+
+        # Regular command processing
         # dispatches and runs a command like 'add-contact' or 'add-note-tag'
         additional_params = command_name.split("-")[2:]  # ['phone', 'number']
         func_name = command_name.replace('-', '_')

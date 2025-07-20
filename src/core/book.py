@@ -68,6 +68,9 @@ class Book(ABC, UserDict[str, Record]):
         record_object = record_class(**kwargs)
         self.data[record_object.record_as_option()] = record_object
 
+        # Index the new record for searching
+        self.fast_search.index_record(self.get_book_name(), record_object)
+
         return RETURN_RESULT_NEW, [record_object], {}
 
     @method_for_bot_interface
@@ -98,7 +101,7 @@ class Book(ABC, UserDict[str, Record]):
         if not query:
             return RETURN_RESULT_NOT_FOUND, [], {}
 
-        # Validate minimum search length
+        # Validate minimum search length if string query
         min_length = FastSearchAdapter.MIN_SEARCH_LENGTH
         if isinstance(query, str) and len(query) < min_length:
             raise ValueError(f"Search query must be at least {min_length} characters long")
@@ -112,36 +115,56 @@ class Book(ABC, UserDict[str, Record]):
                 100    # Limit to 100 results
             )
 
+            if not result_dicts:
+                return RETURN_RESULT_NOT_FOUND, [], {"query": query}
+
             # Map results back to actual record objects
             found_records = []
             for result in result_dicts:
                 record_id = result.get("id")
-                # Find the actual record object
+
+                # Find matching record by ID or key fields
                 record_found = False
                 for record in self.data.values():
-                    rec_id = record.fields.get("id") or id(record)
+                    # Try matching by ID first
+                    rec_id = record.fields.get("id") or record.record_as_option()
                     if str(rec_id) == str(record_id):
                         found_records.append(record)
                         record_found = True
+                        # Ensure ID is consistent
+                        if "id" not in record.fields:
+                            record.fields["id"] = str(rec_id)
                         break
 
-                # If we couldn't find the record, it might be because of ID mismatches
+                # If we couldn't find by ID, try matching on key fields
                 if not record_found:
-                    # Try matching on key fields
                     for record in self.data.values():
-                        # Compare critical fields
+                        # Compare required fields
                         matches = True
-                        for key, value in result.items():
-                            if key in record.fields and str(record.fields[key]) != str(value):
-                                matches = False
-                                break
+                        required_fields = self.get_record_class().get_record_required_fields()
+                        for field in required_fields:
+                            if field in result and field in record.fields:
+                                if str(record.fields[field]) != str(result[field]):
+                                    matches = False
+                                    break
                         if matches:
                             found_records.append(record)
                             # Update the ID for future searches
                             record.fields['id'] = record_id
+                            # Also update the search index with this record to maintain consistency
+                            self.fast_search.update_record(self.get_book_name(), record)
                             break
 
-            return RETURN_RESULT_FOUND, found_records, {"query":query}
+            # Remove duplicates
+            unique_records = []
+            seen_ids = set()
+            for record in found_records:
+                rec_id = record.fields.get("id") or record.record_as_option()
+                if str(rec_id) not in seen_ids:
+                    seen_ids.add(str(rec_id))
+                    unique_records.append(record)
+
+            return RETURN_RESULT_FOUND, unique_records, {"query": query}
         except ValueError as e:
             # Re-raise with the same message
             raise ValueError(str(e))
@@ -178,13 +201,17 @@ class Book(ABC, UserDict[str, Record]):
                     record.multi_value_fields.setdefault(multi_value_field_name, {}).pop(
                         multi_value_field_value_to_replace, None
                     )
-                    record.multi_value_fields[multi_value_field_name][new_multi_value_field_value] = new_multi_value_field_value
+                    record.multi_value_fields[multi_value_field_name][
+                        new_multi_value_field_value] = new_multi_value_field_value
 
             for multi_value_field_name_to_delete, multi_field_values_to_delete in multi_field_values_to_delete.items():
                 for multi_value_field_value_to_delete in multi_field_values_to_delete:
                     record.multi_value_fields.setdefault(multi_value_field_name_to_delete, {}).pop(
                         multi_value_field_value_to_delete, None
                     )
+
+            # Update the search index with the modified record
+            self.fast_search.update_record(self.get_book_name(), record)
 
         return RETURN_RESULT_UPDATED, records_to_update, conditions
 
@@ -255,6 +282,10 @@ class Book(ABC, UserDict[str, Record]):
             return RETURN_RESULT_NOT_DELETED, list(self.data.values()), conditions
 
         for record_to_delete in records_to_delete:
+            # Remove from search index first
+            record_id = record_to_delete.fields.get("id") or record_to_delete.record_as_option()
+            self.fast_search.delete_record(self.get_book_name(), str(record_id))
+            # Then remove from data
             del self.data[record_to_delete.record_as_option()]
 
         # returns deleted records
@@ -266,17 +297,14 @@ class Book(ABC, UserDict[str, Record]):
 
         for field, expected_value in conditions.items():
             # forcing everything to lower case
+            expected_value_lower = str(expected_value).lower()
 
             if field in multi_value_fields:
-                key_or_value = next(iter(expected_value.items()))
-                expected_value_lower = str(key_or_value[0] if key_or_value[0] else key_or_value[1]).lower()
-
                 actual_values = multi_value_fields_entries.get(field, {}).keys()
                 actual_values_lower = [str(v).lower() for v in actual_values]
                 if expected_value_lower not in actual_values_lower:
                     return False
             else:
-                expected_value_lower = str(expected_value).lower()
                 actual_value = record.fields.get(field)
                 if str(actual_value).lower() != expected_value_lower:
                     return False
