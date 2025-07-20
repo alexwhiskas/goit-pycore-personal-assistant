@@ -5,7 +5,7 @@ import signal
 import sys
 from functools import wraps
 
-from colorama import init
+from colorama import init, Fore, Style
 
 from src.bot.book_manager import BookManager
 
