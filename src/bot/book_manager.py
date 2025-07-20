@@ -108,7 +108,7 @@ class BookManager:
 
                     if isinstance(prompted_args, str) and prompted_args == PREV_OPERATION:
                         return try_run_operation_from_customer_input()
-                    elif isinstance(prompted_args, str) and prompted_args == EXIT_OPERATION:
+                    elif user_input == EXIT_OPERATION:
                         return EXIT_OPERATION
 
                     command_execution_result = self.run_command(user_input, **prompted_args)
