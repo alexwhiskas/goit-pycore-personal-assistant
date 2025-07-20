@@ -201,6 +201,9 @@ class BookManager:
                     return self._handle_suggest_existing(current_operation_book, conditions, prompted_args, completer, result_code)
 
                 return PREV_OPERATION
+            else:
+                print("Unexpected behavior, going to previous step.")
+                return PREV_OPERATION
 
         elif isinstance(command_execution_result, list):
             self.print_result_records(
