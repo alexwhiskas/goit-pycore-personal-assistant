@@ -299,8 +299,8 @@ class BookManager:
             book_name = book_obj.get_book_name()
             book_pkl_data_file_path = books_root / book_name / f'{book_name}_book_data.pkl'
 
-            with open(book_pkl_data_file_path, "wb") as f:
-                pickle.dump(book_obj, f)
+            # with open(book_pkl_data_file_path, "wb") as f:
+            #     pickle.dump(book_obj, f)
 
     def get_book (self, book_name: str):
         if book_name not in self.books:
