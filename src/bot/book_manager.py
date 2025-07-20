@@ -422,7 +422,18 @@ class BookManager:
 
         return methods_to_process
 
-    def run_command (self, command_name: str, **kwargs):
+    def run_command(self, command_name: str, **kwargs):
+        # Handle global help command
+        if command_name == "help":
+            group = kwargs.get("group")
+            if group and group in self.supported_operations_per_book:
+                print(f"\n{Fore.BLUE}📚 Help for {group.capitalize()} commands:{Style.RESET_ALL}")
+                self._print_supported_grouped_commands({group: self.supported_operations_per_book[group]})
+            else:
+                print(f"\n{Fore.BLUE}📚 All available commands:{Style.RESET_ALL}")
+                self._print_supported_grouped_commands(self.supported_operations_per_book)
+            return []
+
         # Handle global search command
         if command_name == "search-all":
             query = kwargs.get("query")
