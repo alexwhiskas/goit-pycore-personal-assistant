@@ -108,7 +108,7 @@ class BookManager:
         print(f"{Fore.YELLOW}ℹ️ Press Ctrl+C to exit at any time{Style.RESET_ALL}")
         print(f"{Fore.CYAN}{'=' * 50}{Style.RESET_ALL}\n")
 
-    def start (self, book_selection_prompt):
+    def start (self):
         grouped_commands = copy.deepcopy(self.supported_operations_per_book)
         grouped_commands['global'] = {
             'search-all': {'query': 'text to search across all books'},
@@ -150,10 +150,7 @@ class BookManager:
         if isinstance(command_execution_result, tuple) and len(command_execution_result) == 3:
             result_code, result_records, conditions = command_execution_result
             book_name_from_operation = user_input.split("-")[1]
-            current_operation_book = self.books.get(book_name_from_operation) or self.books.get(
-                book_name_from_operation[:-1]
-                )
-            print(f"Current operation book: {current_operation_book}")
+            current_operation_book = self.books.get(book_name_from_operation) or self.books.get(book_name_from_operation[:-1])
 
             if result_code in [RETURN_RESULT_NEW, RETURN_RESULT_UPDATED, RETURN_RESULT_DELETED, RETURN_RESULT_FOUND]:
                 self.print_result_records(

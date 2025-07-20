@@ -37,7 +37,7 @@ def input_error (func):
 
 def main ():
     try:
-        book_manager.start(f'Hi, I\'m a book manager, please select a book you would like to work with:')
+        book_manager.start()
     finally:
         book_manager.save_books_state()
         print("\nAddress book saved.")

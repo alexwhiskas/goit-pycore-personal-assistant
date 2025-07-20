@@ -95,7 +95,7 @@ class CommandAutoCompletion:
 
         print(f"\n{Fore.CYAN}🔍 Command '{Fore.GREEN}{command}{Fore.CYAN}' requires arguments:{Style.RESET_ALL}")
         args_dict = {}
-        requested_operation_args = self.extracted_from_groups_command_params[command]
+        requested_operation_args = copy.deepcopy(self.extracted_from_groups_command_params[command])
 
         # Special handling for commands without hyphens
         if "-" not in command:
@@ -243,7 +243,6 @@ class CommandAutoCompletion:
                     print("You entered the wrong answer, let's try again.")
                     continue
 
-                del user_input, choice, should_suggest, matches, best_match
                 return selected_command, self.collect_command_arguments(selected_command)
             else:
                 # No suggestions needed or no matches found
@@ -259,8 +258,6 @@ class CommandAutoCompletion:
                     for group_name in ['global', 'general']:
                         proposed_groups.append(group_name)
                         commands_to_propose += grouped_commands_to_propose[group_name].keys()
-                        del grouped_commands_to_propose[group_name]
-                        # commands_to_propose.update()
 
                     commands_left_to_propose = (10 - len(commands_to_propose)) / len(grouped_commands_to_propose)
                     for group_name, group_commands in grouped_commands_to_propose.items():
@@ -273,7 +270,6 @@ class CommandAutoCompletion:
                                 commands_to_propose.append(group_command)
                                 amount_of_proposed_commands += 1
 
-                    del proposed_groups, commands_to_propose, grouped_commands_to_propose, commands_left_to_propose, group_name, group_commands, amount_of_proposed_commands
                     print(f"{Fore.GREEN}{', '.join(self.groups[:10])}{Style.RESET_ALL}")  # Show first 10 commands
                     continue
                 else:
