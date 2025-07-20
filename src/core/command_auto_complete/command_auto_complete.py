@@ -45,7 +45,7 @@ class CommandAutoCompletion:
 
         # Exact matches first
         exact_matches = []
-        if self.extracted_from_groups_command_params.get(user_input):
+        if user_input in self.extracted_from_groups_command_params:
             exact_matches.append(user_input)
 
         # If no exact matches, try close matching

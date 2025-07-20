@@ -178,8 +178,7 @@ class Book(ABC, UserDict[str, Record]):
                     record.multi_value_fields.setdefault(multi_value_field_name, {}).pop(
                         multi_value_field_value_to_replace, None
                     )
-                    record.multi_value_fields[multi_value_field_name][
-                        new_multi_value_field_value] = new_multi_value_field_value
+                    record.multi_value_fields[multi_value_field_name][new_multi_value_field_value] = new_multi_value_field_value
 
             for multi_value_field_name_to_delete, multi_field_values_to_delete in multi_field_values_to_delete.items():
                 for multi_value_field_value_to_delete in multi_field_values_to_delete:
@@ -267,14 +266,17 @@ class Book(ABC, UserDict[str, Record]):
 
         for field, expected_value in conditions.items():
             # forcing everything to lower case
-            expected_value_lower = str(expected_value).lower()
 
             if field in multi_value_fields:
+                key_or_value = next(iter(expected_value.items()))
+                expected_value_lower = str(key_or_value[0] if key_or_value[0] else key_or_value[1]).lower()
+
                 actual_values = multi_value_fields_entries.get(field, {}).keys()
                 actual_values_lower = [str(v).lower() for v in actual_values]
                 if expected_value_lower not in actual_values_lower:
                     return False
             else:
+                expected_value_lower = str(expected_value).lower()
                 actual_value = record.fields.get(field)
                 if str(actual_value).lower() != expected_value_lower:
                     return False

@@ -94,12 +94,6 @@ class FastSearchAdapter:
 
                     for query_value in query.values():
                         results += self.search_module.search(book_name, query_value, filters, limit)
-
-                    added_options = []
-                    unique_results = []
-                    # todo: return only unique records
-                    # for result in results:
-                    #     record_as_option =
                 else:
                     results = self.search_module.search(book_name, query, filters, limit)
 

@@ -180,7 +180,18 @@ class BookManager:
                                 return PREV_OPERATION
                             elif user_preferred_record_operation == suggest_existing:
                                 # self.animate_process_func('Looking for records to suggest')
-                                # found_records_result_code, found_records, conditions_to_find_by = current_operation_book.search_records(' '.join(list(conditions.values())))
+                                multi_value_fields = current_operation_book.get_record_class().get_multi_value_fields()
+
+                                for multi_value_field in multi_value_fields:
+                                    multi_value_condition = conditions.get(multi_value_field)
+
+                                    if multi_value_condition:
+                                        for multi_value_condition_key, multi_value_condition_value in multi_value_condition.items():
+                                            if not multi_value_condition_key:
+                                                conditions[multi_value_field] = multi_value_condition_value
+                                            else:
+                                                conditions[multi_value_field] = multi_value_condition_key
+
                                 found_records_result_code, found_records, conditions_to_find_by = current_operation_book.search_records(conditions)
 
                                 if found_records:
@@ -192,7 +203,7 @@ class BookManager:
                                     print(f"Records options: {list(records_options.keys())}")
                                     # return PREV_OPERATION # todo: remove after test
 
-                                    selection_from_founded_records = '' # todo: remove after test
+                                    selection_from_founded_records = "title: title111" # todo: remove after test
                                     # selection_from_founded_records = questionary.select(
                                     #     'Choose from one of the following records to process:',
                                     #     list(records_options.keys()) + [return_to_prev_step_option],
@@ -200,6 +211,9 @@ class BookManager:
 
                                     # todo: complete emulation of update_record command execution
                                     if result_code == RETURN_RESULT_NOT_UPDATED:
+                                        if selection_from_founded_records == selection_from_founded_records:
+                                            return PREV_OPERATION
+
                                         found_record_to_update = current_operation_book.data[selection_from_founded_records]
                                         prompted_args = {}
 
@@ -263,7 +277,11 @@ class BookManager:
                     else:
                         return RETRY_OPERATION
 
-                try_run_operation_from_customer_input()
+                self.save_books_state()
+                self._initialize_search_indexes()
+                result = try_run_operation_from_customer_input()
+                if result == EXIT_OPERATION:
+                    break
         finally:
             self.save_books_state()
             print(f"\n{Fore.GREEN}✅ Address book saved.{Style.RESET_ALL}")
