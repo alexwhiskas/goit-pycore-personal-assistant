@@ -1,0 +1,57 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "personal-assistant"
+version = "1.0.0"
+authors = [
+    { name="Oleksandr Halaburda", email="algalsmile@icloud.com" },
+    { name="Kirill Kulakov", email="kirillkulakow31@gmail.com" },
+    { name="Anatolii Zhakun", email="nazhulm@gmail.com" },
+]
+description = "A personal assistant with contact and note management capabilities"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "colorama>=0.4.6",
+    "prompt_toolkit>=3.0.0",
+    "pathlib>=1.0.1",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/alexwhiskas/goit-pycore-personal-assistant"
+"Bug Tracker" = "https://github.com/alexwhiskas/goit-pycore-personal-assistant/issues"
+
+[tool.black]
+line-length = 100
+target-version = ['py38']
+include = '\.pyi?$'
+
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+line_length = 100
+known_third_party = [
+    "colorama",
+    "prompt_toolkit",
+    "pathlib",
+]
+[tool.hatch.build.targets.wheel]
+include = [
+    "personal_assistant/**",
+    "README.md",
+    "pyproject.toml",
+]
+[tool.hatch.build.targets.sdist]
+include = [
+    "personal_assistant/**",
+    "README.md",
+    "pyproject.toml",
+]
+[tool.hatch.metadata]
+dynamic = [
+    "version",
+]
+[tool.hatch.version]
+path = "personal_assistant/__init__.py"
