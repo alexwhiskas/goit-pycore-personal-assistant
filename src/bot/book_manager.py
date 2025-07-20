@@ -180,7 +180,7 @@ class BookManager:
                                 return PREV_OPERATION
                             elif user_preferred_record_operation == suggest_existing:
                                 # self.animate_process_func('Looking for records to suggest')
-                                multi_value_fields = current_operation_book.get_record_class().get_multi_value_fields()
+                                multi_value_fields = current_operation_book.get_record_class().get_record_multi_value_fields()
 
                                 for multi_value_field in multi_value_fields:
                                     multi_value_condition = conditions.get(multi_value_field)
@@ -240,7 +240,7 @@ class BookManager:
                                                         }
                                                     )
 
-                                            found_record_multi_value_fields = found_record_to_update.get_multi_value_fields()
+                                            found_record_multi_value_fields = found_record_to_update.get_record_multi_value_fields()
                                             found_record_multi_value_fields_values = found_record_to_update.multi_value_fields
 
                                             for found_record_multi_value_field in found_record_multi_value_fields:
