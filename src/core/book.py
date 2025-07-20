@@ -85,7 +85,7 @@ class Book(ABC, UserDict[str, Record]):
         """
         conditions = {
             **self._parse_fields_conditions_from_kwargs(need_to_check_suffix, **kwargs),
-            **self._parse_multi_value_fields_from_kwargs(False, **kwargs)
+            **self._parse_multi_value_fields_from_kwargs(need_to_check_suffix, False, **kwargs)
         }
 
         # returns a list of all records that match the conditions
@@ -160,6 +160,7 @@ class Book(ABC, UserDict[str, Record]):
             seen_ids = set()
             for record in found_records:
                 rec_id = record.fields.get("id") or record.record_as_option()
+
                 if str(rec_id) not in seen_ids:
                     seen_ids.add(str(rec_id))
                     unique_records.append(record)
@@ -186,7 +187,7 @@ class Book(ABC, UserDict[str, Record]):
             return RETURN_RESULT_NOT_UPDATED, list(self.data.values()), conditions
 
         fields_to_update = self._parse_fields_to_update_from_kwargs(**kwargs)
-        multi_field_values_to_update = self._parse_multi_value_fields_from_kwargs(True, **kwargs)
+        multi_field_values_to_update = self._parse_multi_value_fields_from_kwargs(False, True, **kwargs)
         multi_field_values_to_delete = self._parse_multi_value_fields_to_delete_from_kwargs(**kwargs)
 
         for record in records_to_update:
@@ -237,23 +238,27 @@ class Book(ABC, UserDict[str, Record]):
 
         return fields_to_update
 
-    def _parse_multi_value_fields_from_kwargs (self, for_update_operation: bool, **kwargs):
+    def _parse_multi_value_fields_from_kwargs (self, need_to_check_suffix: bool, for_update_operation: bool, **kwargs):
         multi_field_values = {}
 
         multi_value_fields = self.get_record_class().get_record_multi_value_fields()
 
         for multi_value_field_name in multi_value_fields:
             multi_value_field_value_to_update_with_arg = Book.get_multi_value_to_update_prefix() + '_' + multi_value_field_name
-            multi_value_field_value_to_search_by_arg = Book.get_multi_value_to_search_prefix() + '_' + multi_value_field_name
+            multi_value_field_value_to_search_by_arg = (Book.get_search_prefix() if need_to_check_suffix else Book.get_multi_value_to_search_prefix()) + '_' + multi_value_field_name
             new_value = kwargs.get(multi_value_field_value_to_update_with_arg)
             old_value = kwargs.get(multi_value_field_value_to_search_by_arg)
 
-            if not old_value and not for_update_operation:
-                continue
-            if old_value:
-                multi_field_values.setdefault(multi_value_field_name, {})[old_value] = new_value
-            else:
-                multi_field_values.setdefault(multi_value_field_name, {})[''] = new_value
+            if for_update_operation:
+                if old_value and old_value is not None:
+                    multi_field_values.setdefault(multi_value_field_name, {})[old_value] = new_value
+                else:
+                    multi_field_values.setdefault(multi_value_field_name, {})[''] = new_value
+            elif old_value:
+                if need_to_check_suffix:
+                    multi_field_values[multi_value_field_name] = old_value
+                else:
+                    multi_field_values.setdefault(multi_value_field_name, {})[old_value] = old_value
 
         return multi_field_values
 
@@ -297,14 +302,20 @@ class Book(ABC, UserDict[str, Record]):
 
         for field, expected_value in conditions.items():
             # forcing everything to lower case
-            expected_value_lower = str(expected_value).lower()
 
             if field in multi_value_fields:
+                expected_values = expected_value
+                if isinstance(expected_values, str):
+                    expected_values = [expected_value]
+
                 actual_values = multi_value_fields_entries.get(field, {}).keys()
-                actual_values_lower = [str(v).lower() for v in actual_values]
-                if expected_value_lower not in actual_values_lower:
-                    return False
+                actual_values_lower = str([str(v).lower() for v in actual_values])
+                for expected_value_entry in expected_values:
+                    expected_value_entry_lower = expected_value_entry.lower()
+                    if expected_value_entry_lower not in actual_values_lower:
+                        return False
             else:
+                expected_value_lower = str(expected_value).lower()
                 actual_value = record.fields.get(field)
                 if str(actual_value).lower() != expected_value_lower:
                     return False

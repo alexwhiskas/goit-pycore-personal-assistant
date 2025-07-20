@@ -1,5 +1,5 @@
 # src/bot/book_manager.py
-
+import copy
 import importlib
 import inspect
 import pickle
@@ -170,28 +170,32 @@ class BookManager:
                             if (alternative_choice):
                                 prompt_message = f"Do you want to update existing record or add a new one? ({alternative_choice}/{suggest_existing}), if nothing entered, moving to prev operation: "
                             else:
-                                prompt_message = f"Do you want us to '{suggest_existing}' record? If nothing entered, moving to prev operation: "
+                                prompt_message = f"Enter '{suggest_existing}' to get some suggestions for records to update. Any other input will lead to moving to prev operation: "
 
-                            user_preferred_record_operation = input(prompt_message).strip()  # todo: check issue if nothing entered
+                            user_preferred_record_operation = str(input(prompt_message)).strip()
 
                             if alternative_choice and user_preferred_record_operation == alternative_choice:
                                 current_operation_book.add_record(**prompted_args)
 
                                 return PREV_OPERATION
                             elif user_preferred_record_operation == suggest_existing:
-                                # self.animate_process_func('Looking for records to suggest')
                                 multi_value_fields = current_operation_book.get_record_class().get_record_multi_value_fields()
 
                                 for multi_value_field in multi_value_fields:
                                     multi_value_condition = conditions.get(multi_value_field)
 
                                     if multi_value_condition:
-                                        for multi_value_condition_key, multi_value_condition_value in multi_value_condition.items():
-                                            if not multi_value_condition_key:
-                                                conditions[multi_value_field] = multi_value_condition_value
-                                            else:
-                                                conditions[multi_value_field] = multi_value_condition_key
+                                        if isinstance(multi_value_condition, str):
+                                            conditions[multi_value_field] = multi_value_condition
+                                        else:
+                                            # todo: running of add-note-tag command and searching by non-existing tag - causes error
+                                            for multi_value_condition_key, multi_value_condition_value in multi_value_condition.items():
+                                                if not multi_value_condition_key:
+                                                    conditions[multi_value_field] = multi_value_condition_value
+                                                else:
+                                                    conditions[multi_value_field] = multi_value_condition_key
 
+                                # self.animate_process_func('Looking for records to suggest')
                                 found_records_result_code, found_records, conditions_to_find_by = current_operation_book.search_records(conditions)
 
                                 if found_records:
@@ -200,8 +204,7 @@ class BookManager:
                                         records_options[found_record.record_as_option()] = found_record
 
                                     return_to_prev_step_option = "---Return to previous step"
-                                    print(f"Records options: {list(records_options.keys())}")
-                                    # return PREV_OPERATION # todo: remove after test
+                                    print(f"Records options: {list(records_options.keys())}") # todo: to remove
 
                                     selection_from_founded_records = "title: title111" # todo: remove after test
                                     # selection_from_founded_records = questionary.select(
@@ -215,48 +218,57 @@ class BookManager:
                                             return PREV_OPERATION
 
                                         found_record_to_update = current_operation_book.data[selection_from_founded_records]
-                                        prompted_args = {}
+                                        new_record_data = copy.deepcopy(prompted_args)
 
                                         def build_record_to_update_dict_from_objects(new_record_data, found_record_to_update):
+                                            prompted_args = {}
                                             found_record_fields = found_record_to_update.get_record_fields()
                                             found_record_fields_values = found_record_to_update.fields
 
                                             for found_record_field in found_record_fields:
-                                                if not new_record_data.get(found_record_field):
-                                                    continue
+                                                found_record_field_with_search_prefix = Book.get_search_prefix() + '_' + found_record_field
+                                                found_record_field_data_to_replace_in_found = str(found_record_fields_values.get(found_record_field))
+                                                prompted_args.update({found_record_field_with_search_prefix:found_record_field_data_to_replace_in_found})
 
-                                                if not found_record_to_update.get(found_record_field):
-                                                    prompted_args.update(
-                                                        {
-                                                            Book.get_multi_value_to_update_prefix() + '_' + found_record_field: new_record_data[new_record_data]
-                                                        }
-                                                    )
-                                                prompted_args.update({Book.get_search_prefix() + '_' + found_record_field: found_record_fields_values[found_record_field]})
-
-                                                if found_record_field in new_record_data:
-                                                    prompted_args.update(
-                                                        {
-                                                            Book.get_multi_value_to_update_prefix() + '_' + found_record_field: new_record_data[new_record_data]
-                                                        }
-                                                    )
+                                                new_record_field_with_update_prefix = Book.get_update_prefix() + '_' + found_record_field
+                                                new_record_field_data_to_replace_in_found = str(new_record_data.get(new_record_field_with_update_prefix))
+                                                prompted_args.update({new_record_field_with_update_prefix:new_record_field_data_to_replace_in_found})
 
                                             found_record_multi_value_fields = found_record_to_update.get_record_multi_value_fields()
                                             found_record_multi_value_fields_values = found_record_to_update.multi_value_fields
 
                                             for found_record_multi_value_field in found_record_multi_value_fields:
-                                                if not found_record_multi_value_fields_values.get(found_record_multi_value_field):
-                                                    continue
-                                                prompted_args.update({Book.get_search_prefix() + '_' + found_record_multi_value_field: found_record_multi_value_fields_values[found_record_multi_value_field]})
+                                                found_record_multi_value_field_values = found_record_to_update.multi_value_fields.get(found_record_multi_value_field)
+                                                if found_record_multi_value_field_values:
+                                                    found_record_multi_value_field_param_key = Book.get_search_prefix() + '_' + found_record_multi_value_field
+                                                    prompted_args.update({found_record_multi_value_field_param_key:list(found_record_multi_value_field_values.values())})
 
-                                                if found_record_field in new_record_data:
-                                                    prompted_args.update(
-                                                        {
-                                                            Book.get_multi_value_to_update_prefix() + '_' + found_record_field: new_record_data[new_record_data]
-                                                        }
-                                                    )
+                                                new_record_field_with_update_prefix = Book.get_multi_value_to_update_prefix() + '_' + found_record_multi_value_field
+                                                new_record_field_data_to_replace_by_in_found = str(new_record_data.get(new_record_field_with_update_prefix))
+                                                prompted_args.update({new_record_field_with_update_prefix:new_record_field_data_to_replace_by_in_found})
 
-                                        prepared_prompt_args = build_record_to_update_dict_from_objects()
-                                        update_result_code = current_operation_book.update_records(**prompted_args)
+                                                found_record_multi_value_field_with_search_prefix = Book.get_multi_value_to_search_prefix() + '_' + found_record_multi_value_field
+                                                new_record_field_data_to_replace_with_in_found_from_new_record = str(new_record_data.get(found_record_multi_value_field_with_search_prefix))
+                                                found_record_multi_value_field_values_to_replace = found_record_multi_value_fields_values.get(found_record_multi_value_field)
+                                                found_record_multi_value_field_to_replace = str(found_record_multi_value_field_values_to_replace.get(new_record_field_data_to_replace_with_in_found_from_new_record))
+                                                prompted_args.update({found_record_multi_value_field_with_search_prefix:found_record_multi_value_field_to_replace})
+
+                                            return prompted_args
+
+                                        prepared_prompt_args = build_record_to_update_dict_from_objects(new_record_data, found_record_to_update)
+                                        print('Prepared prompted args for update emulation :', prepared_prompt_args)
+                                        suggested_update_result_code, suggested_update_result_records, suggested_update_result_conditions = current_operation_book.update_records(**prepared_prompt_args)
+
+                                        if suggested_update_result_code == RETURN_RESULT_NOT_UPDATED:
+                                            print(f"Returning to previous step, we couldn't find any records for your keywords: " + self._dict_to_string(conditions))
+                                        else:
+                                            self.print_result_records(
+                                                print(
+                                                    f"Successfully updates suggested record(s):"
+                                                ),
+                                                suggested_update_result_records
+                                            )
+
                                     else:
                                         if selection_from_founded_records in records_options:
                                             del current_operation_book.data[selection_from_founded_records]
@@ -277,8 +289,6 @@ class BookManager:
                     else:
                         return RETRY_OPERATION
 
-                self.save_books_state()
-                self._initialize_search_indexes()
                 result = try_run_operation_from_customer_input()
                 if result == EXIT_OPERATION:
                     break
