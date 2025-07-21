@@ -119,7 +119,9 @@ class Record(ABC):
 
         # fields values
         for key, value in self.fields.items():
-            lines.append(f"  {key}: {value}")
+            # id is not a field, it's a property
+            if key is not "id":
+                lines.append(f"  {key}: {value}")
 
         # multi-value fields
         if self.multi_value_fields:

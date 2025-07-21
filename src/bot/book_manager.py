@@ -220,7 +220,7 @@ class BookManager:
 
     def handle_simple_success_operation(self, result_code, result_records):
         self.print_result_records(
-            f"As result of your inputs, following record(s) was/were {result_code}",
+            f"As result of your inputs, following record(s) was(were) {result_code}",
             result_records
         )
 

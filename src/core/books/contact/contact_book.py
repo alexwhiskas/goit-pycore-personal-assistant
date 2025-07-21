@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 from typing import List
 
 from src.core.book import Book
-from src.core.decorators import hidden_method, method_args_as_command_params
+from src.core.decorators import hidden_method, method_args_as_command_params, method_for_bot_interface
 
 
 class ContactBook(Book):
@@ -18,6 +18,7 @@ class ContactBook(Book):
         from src.core.books.contact.contact_record import ContactRecord
         return ContactRecord
 
+    @method_for_bot_interface
     @method_args_as_command_params
     def get_coming_birthdays_from_now (self, days_ahead: int = 0) -> List[str]:
         days_ahead = int(days_ahead)
@@ -30,7 +31,7 @@ class ContactBook(Book):
         matching_records = []
 
         for record in self.data.values():
-            birthday = getattr(record, 'birthday', None)
+            birthday = record.fields["birthday"]
             if not birthday:
                 continue
 
