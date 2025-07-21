@@ -13,11 +13,12 @@ from colorama import Fore, Style
 
 from src.core.book import (
     Book, RETURN_RESULT_NEW, RETURN_RESULT_FOUND, RETURN_RESULT_DUPLICATE, RETURN_RESULT_DELETED,
-    RETURN_RESULT_NOT_DELETED, RETURN_RESULT_UPDATED, RETURN_RESULT_NOT_UPDATED
+    RETURN_RESULT_NOT_DELETED, RETURN_RESULT_UPDATED, RETURN_RESULT_NOT_UPDATED, RETURN_RESULT_NOT_FOUND
 )
 from src.core.command_auto_complete.command_auto_complete import CommandAutoCompletion
 from src.core.fast_search_adapter import FastSearchAdapter
 from src.core.response_code import PREV_OPERATION, RETRY_OPERATION, EXIT_OPERATION
+from src.core.utilities import dict_to_string
 
 
 class BookManager:
@@ -153,15 +154,11 @@ class BookManager:
             current_operation_book = self.books.get(book_name_from_operation) or self.books.get(book_name_from_operation[:-1])
 
             if result_code in [RETURN_RESULT_NEW, RETURN_RESULT_UPDATED, RETURN_RESULT_DELETED, RETURN_RESULT_FOUND]:
-                self.print_result_records(
-                    f'As result of your inputs, following record(s) was/were {result_code}',
-                    result_records
-                )
-                return result_code
+                return self.handle_simple_success_operation(result_code, result_records)
 
             elif result_code == RETURN_RESULT_DUPLICATE:
                 self.print_result_records(
-                    f'Following entered params: {self._dict_to_string(conditions)}, will create collision with existing records: ',
+                    f"Following entered params: {dict_to_string(conditions)}, will create collision with existing records: ",
                     result_records
                 )
                 user_preferred_record_operation = input(
@@ -171,16 +168,16 @@ class BookManager:
                 if user_preferred_record_operation == 'add':
                     print(
                         f'We\'ll re-start execution of current command. Please, update one of the following params to create new record when asked next time: '
-                        + self._dict_to_string(conditions)
+                        + dict_to_string(conditions)
                     )
                     return RETRY_OPERATION
                 else:
-                    current_operation_book.update_records(**prompted_args)
-                    return RETURN_RESULT_UPDATED
+                    update_action_result_code, update_action_result_records, update_action_conditions = current_operation_book.update_records(True, False, **prompted_args)
+                    return self.handle_simple_success_operation(update_action_result_code, update_action_result_records)
 
             elif result_code in [RETURN_RESULT_NOT_UPDATED, RETURN_RESULT_NOT_DELETED]:
                 print(
-                    f"Couldn't find record to update with entered search params: " + self._dict_to_string(conditions)
+                    f"Couldn't find record to update with entered search params: " + dict_to_string(conditions)
                 )
 
                 suggest_existing = "suggest existing"
@@ -204,6 +201,9 @@ class BookManager:
                         )
 
                 return PREV_OPERATION
+            elif RETURN_RESULT_NOT_FOUND:
+                print("Couldn't find records with entered above params. Returning to previous step.")
+                return PREV_OPERATION
             else:
                 print("Unexpected behavior, going to previous step.")
                 return PREV_OPERATION
@@ -218,6 +218,14 @@ class BookManager:
         else:
             return RETRY_OPERATION
 
+    def handle_simple_success_operation(self, result_code, result_records):
+        self.print_result_records(
+            f"As result of your inputs, following record(s) was/were {result_code}",
+            result_records
+        )
+
+        return result_code
+
     def _handle_suggest_existing (self, book, conditions, prompted_args, completer, result_code):
         # Mutate multi-value conditions to flat values if needed
         for field in book.get_record_class().get_record_multi_value_fields():
@@ -231,7 +239,7 @@ class BookManager:
 
         if not found_records:
             print(
-                f"Returning to previous step, we couldn't find any records for your keywords: {self._dict_to_string(conditions)}"
+                f"Returning to previous step, we couldn't find any records for your keywords: {dict_to_string(conditions)}"
                 )
             return PREV_OPERATION
 
@@ -252,7 +260,7 @@ class BookManager:
 
         if update_result_code == RETURN_RESULT_NOT_UPDATED:
             print(
-                f"Returning to previous step, we couldn't find any records for your keywords: {self._dict_to_string(conditions)}"
+                f"Returning to previous step, we couldn't find any records for your keywords: {dict_to_string(conditions)}"
                 )
         else:
             print("Successfully updated suggested record(s):")
@@ -528,6 +536,3 @@ class BookManager:
         for record in records:
             print(record)
             print("-" * 30)
-
-    def _dict_to_string (self, data: dict, separator: str = ", ") -> str:
-        return separator.join(f'{k}= {v}' for k, v in data.items())

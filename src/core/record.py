@@ -31,15 +31,10 @@ class Record(ABC):
     def get_record_fields_to_validate (cls) -> list[str]:
         pass
 
-    @classmethod
-    @hidden_method
-    def get_duplicate_check_fields (cls) -> list[str]:
-        return cls.get_record_required_fields()
-
     @hidden_method
     @hidden_method
     def record_as_option (self) -> str:
-        keys = self.get_duplicate_check_fields()
+        keys = self.get_record_required_fields()
         parts = [f"{key}: {self.fields.get(key, '<missing>')}" for key in keys]
         return ", ".join(parts)
 
@@ -129,7 +124,7 @@ class Record(ABC):
         # multi-value fields
         if self.multi_value_fields:
             for key, subdict in self.multi_value_fields.items():
-                lines.append(f'  {key}:')
+                lines.append(f"  {key}s:")
                 for v in subdict:
                     lines.append(f"    {v}")
 
