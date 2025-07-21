@@ -98,11 +98,10 @@ class Book(ABC, UserDict[str, Record]):
             if not for_update_operations:
                 suggest_option = "try to search"
 
-                suggest_search_answer = "try to search"
-                # suggest_search_answer = questionary.select(
-                #     f"Couldn't find any matches for following conditions: {dict_to_string(conditions)}. Want to try to perform search? ",
-                #     ["no, go back", suggest_option],
-                # ).ask()
+                suggest_search_answer = questionary.select(
+                    f"Couldn't find any matches for following conditions: {dict_to_string(conditions)}. Want to try to perform search? ",
+                    ["no, go back", suggest_option],
+                ).ask()
 
                 if suggest_search_answer == suggest_option:
                     return self.search_records(conditions)
