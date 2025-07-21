@@ -202,7 +202,7 @@ class Book(ABC, UserDict[str, Record]):
             return RETURN_RESULT_NOT_UPDATED, list(self.data.values()), conditions
 
         fields_to_update = self._parse_fields_to_update_from_kwargs(emulation, **kwargs)
-        multi_field_values_to_update = self._parse_multi_value_fields_from_kwargs(need_to_check_suffix, False, emulation, **kwargs)
+        multi_field_values_to_update = self._parse_multi_value_fields_from_kwargs(False, False, emulation, **kwargs)
         multi_field_values_to_delete = self._parse_multi_value_fields_to_delete_from_kwargs(**kwargs)
 
         for record in records_to_update:

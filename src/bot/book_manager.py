@@ -247,14 +247,14 @@ class BookManager:
         return_option = "---Return to previous step"
 
         selection = questionary.select(
-            'Choose from one of the following records to process:',
+            "Choose from one of the following records to process:",
             list(record_options.keys()) + [return_option],
         ).ask()
 
         if selection == return_option:
             return PREV_OPERATION
 
-        record_to_update = book.data[selection]
+        record_to_update = record_options[selection]
         updated_args = self._build_record_update_args(record_to_update, prompted_args)
         update_result_code, updated_records, _ = book.update_records(**updated_args)
 
@@ -276,16 +276,13 @@ class BookManager:
             args[Book.get_update_prefix() + '_' + field] = str(new_data.get(Book.get_update_prefix() + '_' + field))
 
         for mv_field in record.get_record_multi_value_fields():
-            mv_data = record.multi_value_fields.get(mv_field)
-            if mv_data:
-                args[Book.get_search_prefix() + '_' + mv_field] = list(mv_data.values())
+            args[Book.get_multi_value_to_update_prefix() + '_' + mv_field] = str(new_data.get(Book.get_multi_value_to_update_prefix() + '_' + mv_field) or "")
+            search_val_key = new_data.get(Book.get_multi_value_to_search_prefix() + '_' + mv_field)
+            record_multi_field_values = record.multi_value_fields.get(mv_field) or {}
 
-            args[Book.get_multi_value_to_update_prefix() + '_' + mv_field] = str(
-                new_data.get(Book.get_multi_value_to_update_prefix() + '_' + mv_field)
-                )
-            search_val = new_data.get(Book.get_multi_value_to_search_prefix() + '_' + mv_field)
+            search_val = str(record_multi_field_values.get(search_val_key) or "")
             if search_val:
-                args[Book.get_multi_value_to_search_prefix() + '_' + mv_field] = str(mv_data.get(search_val))
+                args[Book.get_multi_value_to_search_prefix() + '_' + mv_field] = search_val
 
         return args
 
