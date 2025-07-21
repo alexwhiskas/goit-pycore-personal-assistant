@@ -147,7 +147,9 @@ class CommandAutoCompletion:
                         ).strip()
 
                         if prev_operation_or_define_required_field_value_answer == define_value_again_option:
-                            return check_input_for_required_field('')
+                            new_user_input = input(requested_operation_arg_label_prompt).strip()
+
+                            return check_input_for_required_field(new_user_input)
                         else:
                             if prev_operation_or_define_required_field_value_answer == prev_operation_option:
                                 print("Sorry, you didn't entered required field value, you will be redirected to previous step.")
@@ -177,7 +179,9 @@ class CommandAutoCompletion:
                             ).strip()
 
                             if prev_operation_or_define_required_field_value_answer == define_value_again_option:
-                                return check_input_for_required_field(required_field_input_value)
+                                new_user_input = input(requested_operation_arg_label_prompt).strip()
+
+                                return check_input_for_required_field(new_user_input)
                             else:
                                 if prev_operation_or_define_required_field_value_answer != prev_operation_option:
                                     print(

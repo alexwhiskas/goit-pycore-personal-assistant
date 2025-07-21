@@ -26,11 +26,6 @@ class ContactRecord(Record):
 
     @classmethod
     @hidden_method
-    def get_record_fields (cls) -> list[str]:
-        return ['firstname', 'lastname']
-
-    @classmethod
-    @hidden_method
     def get_record_fields_to_validate (cls) -> list[str]:
         return ['email', 'birthday', 'phone_number']
 

@@ -87,26 +87,26 @@ def cache_result (max_size: int = 128):
 
         @wraps(func)
         def wrapper (*args, **kwargs):
-            # Create cache key from args and kwargs
-            cache_key = str(args) + str(sorted(kwargs.items()))
-
-            if cache_key in cache:
-                # Move to end (most recently used)
-                access_order.remove(cache_key)
-                access_order.append(cache_key)
-                return cache[cache_key]
+            # # Create cache key from args and kwargs
+            # cache_key = str(args) + str(sorted(kwargs.items()))
+            #
+            # if cache_key in cache:
+            #     # Move to end (most recently used)
+            #     access_order.remove(cache_key)
+            #     access_order.append(cache_key)
+            #     return cache[cache_key]
 
             # Execute function
             result = func(*args, **kwargs)
 
             # Add to cache
-            cache[cache_key] = result
-            access_order.append(cache_key)
+            # cache[cache_key] = result
+            # access_order.append(cache_key)
 
             # Remove oldest if cache is full
-            if len(cache) > max_size:
-                oldest_key = access_order.pop(0)
-                del cache[oldest_key]
+            # if len(cache) > max_size:
+            #     oldest_key = access_order.pop(0)
+            #     del cache[oldest_key]
 
             return result
 

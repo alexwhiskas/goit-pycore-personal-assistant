@@ -19,11 +19,6 @@ class NoteRecord(Record):
     @classmethod
     @hidden_method
     def get_record_required_fields (cls) -> list[str]:
-        return ['title', 'body']
-
-    @classmethod
-    @hidden_method
-    def get_duplicate_check_fields (cls) -> list[str]:
         return ['title']
 
     @classmethod

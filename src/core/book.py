@@ -3,9 +3,12 @@
 from abc import ABC, abstractmethod
 from collections import UserDict
 
+import questionary
+
 from src.core.decorators import method_for_bot_interface
 from src.core.fast_search_adapter import FastSearchAdapter
 from src.core.record import Record
+from src.core.utilities import dict_to_string
 
 RETURN_RESULT_NEW = 'added'
 RETURN_RESULT_FOUND = 'found'
@@ -61,7 +64,7 @@ class Book(ABC, UserDict[str, Record]):
     def add_record (self, **kwargs) -> tuple[str, list[Record], dict[str, str]]:
         record_class = self.get_record_class()
 
-        result_code, found_duplicate, conditions = self.get_records(False, **kwargs)
+        result_code, found_duplicate, conditions = self.get_records(False, True, **kwargs)
         if result_code == RETURN_RESULT_FOUND:
             return RETURN_RESULT_DUPLICATE, found_duplicate, conditions
 
@@ -85,14 +88,25 @@ class Book(ABC, UserDict[str, Record]):
         """
         conditions = {
             **self._parse_fields_conditions_from_kwargs(need_to_check_suffix, **kwargs),
-            **self._parse_multi_value_fields_from_kwargs(need_to_check_suffix, False, **kwargs)
+            **self._parse_multi_value_fields_from_kwargs(need_to_check_suffix, for_update_operations, **kwargs)
         }
 
         # returns a list of all records that match the conditions
         found_records = [record for record in self.data.values() if self._matches_conditions(record, conditions)]
 
         if not found_records:
-            return RETURN_RESULT_NOT_FOUND, [], conditions
+            if not for_update_operations:
+                suggest_option = "try to search"
+
+                suggest_search_answer = questionary.select(
+                    f"Couldn't find any matches for following conditions: {dict_to_string(conditions)}. Want to try to perform search? ",
+                    ["no, go back", suggest_option],
+                ).ask()
+
+                if suggest_search_answer == suggest_option:
+                    return self.search_records(conditions)
+            else:
+                return RETURN_RESULT_NOT_FOUND, [], conditions
 
         return RETURN_RESULT_FOUND, found_records, conditions
 
@@ -171,7 +185,7 @@ class Book(ABC, UserDict[str, Record]):
             raise ValueError(str(e))
 
     @method_for_bot_interface
-    def update_records (self, **kwargs) -> tuple[str, list[Record], dict[str, str]]:
+    def update_records (self, emulation = False, need_to_check_suffix = True, **kwargs) -> tuple[str, list[Record], dict[str, str]]:
         """
         Example of 'conditions' and 'fields_to_update' vars contents:
         conditions = {
@@ -181,13 +195,13 @@ class Book(ABC, UserDict[str, Record]):
         """
 
         # returns a list of all records that match the conditions
-        result_code, records_to_update, conditions = self.get_records(True, True, **kwargs)
+        result_code, records_to_update, conditions = self.get_records(need_to_check_suffix, True, **kwargs)
 
         if result_code == RETURN_RESULT_NOT_FOUND:
             return RETURN_RESULT_NOT_UPDATED, list(self.data.values()), conditions
 
-        fields_to_update = self._parse_fields_to_update_from_kwargs(**kwargs)
-        multi_field_values_to_update = self._parse_multi_value_fields_from_kwargs(False, True, **kwargs)
+        fields_to_update = self._parse_fields_to_update_from_kwargs(emulation, **kwargs)
+        multi_field_values_to_update = self._parse_multi_value_fields_from_kwargs(False, False, emulation, **kwargs)
         multi_field_values_to_delete = self._parse_multi_value_fields_to_delete_from_kwargs(**kwargs)
 
         for record in records_to_update:
@@ -199,17 +213,12 @@ class Book(ABC, UserDict[str, Record]):
                     if multi_value_field_value_to_replace == '':
                         multi_value_field_value_to_replace = new_multi_value_field_value
 
-                    record.multi_value_fields.setdefault(multi_value_field_name, {}).pop(
-                        multi_value_field_value_to_replace, None
-                    )
-                    record.multi_value_fields[multi_value_field_name][
-                        new_multi_value_field_value] = new_multi_value_field_value
+                    record.multi_value_fields.setdefault(multi_value_field_name, {}).pop(multi_value_field_value_to_replace, None)
+                    record.multi_value_fields[multi_value_field_name][new_multi_value_field_value] = new_multi_value_field_value
 
             for multi_value_field_name_to_delete, multi_field_values_to_delete in multi_field_values_to_delete.items():
                 for multi_value_field_value_to_delete in multi_field_values_to_delete:
-                    record.multi_value_fields.setdefault(multi_value_field_name_to_delete, {}).pop(
-                        multi_value_field_value_to_delete, None
-                    )
+                    record.multi_value_fields.setdefault(multi_value_field_name_to_delete, {}).pop(multi_value_field_value_to_delete, None)
 
             # Update the search index with the modified record
             self.fast_search.update_record(self.get_book_name(), record)
@@ -229,36 +238,43 @@ class Book(ABC, UserDict[str, Record]):
 
         return conditions
 
-    def _parse_fields_to_update_from_kwargs (self, **kwargs):
+    def _parse_fields_to_update_from_kwargs (self, emulation = False, **kwargs):
         fields_to_update = {}
 
         for arg_key, arg_value in kwargs.items():
-            if arg_key.startswith(Book.get_update_prefix()) and arg_value:
-                fields_to_update[arg_key.replace(Book.get_update_prefix() + '_', '')] = arg_value
+            if arg_key not in self.get_record_class().get_record_multi_value_fields():
+                if emulation:
+                    fields_to_update[arg_key] = arg_value
+                elif arg_key.startswith(Book.get_update_prefix()) and arg_value:
+                    fields_to_update[arg_key.replace(Book.get_update_prefix() + '_', '')] = arg_value
 
         return fields_to_update
 
-    def _parse_multi_value_fields_from_kwargs (self, need_to_check_suffix: bool, for_update_operation: bool, **kwargs):
+    def _parse_multi_value_fields_from_kwargs (self, need_to_check_suffix: bool = True, for_update_operation: bool = False, for_emulation = False, **kwargs):
         multi_field_values = {}
+
+        if for_update_operation and not for_emulation:
+            return {}
 
         multi_value_fields = self.get_record_class().get_record_multi_value_fields()
 
         for multi_value_field_name in multi_value_fields:
-            multi_value_field_value_to_update_with_arg = Book.get_multi_value_to_update_prefix() + '_' + multi_value_field_name
-            multi_value_field_value_to_search_by_arg = (Book.get_search_prefix() if need_to_check_suffix else Book.get_multi_value_to_search_prefix()) + '_' + multi_value_field_name
-            new_value = kwargs.get(multi_value_field_value_to_update_with_arg)
-            old_value = kwargs.get(multi_value_field_value_to_search_by_arg)
+            if for_emulation:
+                multi_value_field_value_to_update_with_arg = multi_value_field_name
+            else:
+                multi_value_field_value_to_update_with_arg = Book.get_multi_value_to_update_prefix() + '_' + multi_value_field_name
 
-            if for_update_operation:
-                if old_value and old_value is not None:
+            multi_value_field_value_to_search_by_arg = (Book.get_search_prefix() if need_to_check_suffix else Book.get_multi_value_to_search_prefix()) + '_' + multi_value_field_name
+            new_value = kwargs.get(multi_value_field_value_to_update_with_arg) or ""
+            old_value = kwargs.get(multi_value_field_value_to_search_by_arg) or ""
+
+            if old_value:
+                if need_to_check_suffix:
                     multi_field_values.setdefault(multi_value_field_name, {})[old_value] = new_value
                 else:
-                    multi_field_values.setdefault(multi_value_field_name, {})[''] = new_value
-            elif old_value:
-                if need_to_check_suffix:
-                    multi_field_values[multi_value_field_name] = old_value
-                else:
                     multi_field_values.setdefault(multi_value_field_name, {})[old_value] = old_value
+            elif new_value:
+                multi_field_values.setdefault(multi_value_field_name, {})[new_value] = new_value
 
         return multi_field_values
 
@@ -291,7 +307,9 @@ class Book(ABC, UserDict[str, Record]):
             record_id = record_to_delete.fields.get("id") or record_to_delete.record_as_option()
             self.fast_search.delete_record(self.get_book_name(), str(record_id))
             # Then remove from data
-            del self.data[record_to_delete.record_as_option()]
+            record_to_delete_key = record_to_delete.record_as_option()
+            if record_to_delete_key in self.data:
+                del self.data[record_to_delete.record_as_option()]
 
         # returns deleted records
         return RETURN_RESULT_DELETED, records_to_delete, {}

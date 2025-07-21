@@ -241,35 +241,30 @@ class FastSearchModule:
     @validate_index_exists
     @cache_result(max_size=64)
     def search(self, index_name: str, query: str, filters: Optional[Dict[str, Any]] = None, limit: int = 10) -> List[Dict[str, Any]]:
-        """Search for documents in the specified index"""
+        """Search for documents in the specified index, case-insensitive, in all fields"""
         index_data = self.indices[index_name]
-        query_tokens = _tokenize(query)
-
-        if not query_tokens or not index_data or not index_data.inverted_index:
-            return []
-
-        # Find documents containing query terms
-        candidate_docs = set()
-        for token in query_tokens:
-            candidate_docs.update(index_data.inverted_index[token])
-
-        # Score documents
-        scored_docs = []
-        for doc_id in candidate_docs:
-            score = 0.0
-            for token in query_tokens:
-                score += _calculate_tf_idf(token, doc_id, index_data)
-
-            if score > 0:
-                scored_docs.append({
+        query_word = query.lower()
+        results = []
+        def flatten_values(obj):
+            if isinstance(obj, dict):
+                for v in obj.values():
+                    yield from flatten_values(v)
+            elif isinstance(obj, list):
+                for item in obj:
+                    yield from flatten_values(item)
+            else:
+                yield str(obj)
+        for doc_id, doc in index_data.documents.items():
+            all_values = " ".join(flatten_values(doc)).lower()
+            if query_word in all_values:
+                # Optionally, you can still score by tf-idf if needed, or just return matches
+                results.append({
                     'id': doc_id,
-                    'score': score,
-                    'document': index_data.documents[doc_id]
+                    'score': 1.0,  # or calculate score if needed
+                    'document': doc
                 })
-
-        # Sort by score (descending) and return top results
-        scored_docs.sort(key=lambda x: x['score'], reverse=True)
-        return scored_docs[:limit]
+        results.sort(key=lambda x: x['score'], reverse=True)
+        return results[:limit]
 
     @validate_index_exists
     @handle_exceptions(default_return=None)
